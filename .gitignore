@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/arc.db
+data/arc.db-wal
+data/arc.db-shm
+.arc-tmp/
+.env.local
+.env
