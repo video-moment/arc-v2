@@ -47,6 +47,31 @@ export interface WsEvent {
   payload: unknown;
 }
 
+// ── Squad ──
+export interface Squad {
+  id: string;
+  name: string;
+  description: string;
+  agentIds: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ── Task ──
+export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+
+export interface Task {
+  id: string;
+  squadId: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  assignedAgentId?: string;
+  result?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // ── Agent YAML ──
 export interface AgentYaml {
   name: string;

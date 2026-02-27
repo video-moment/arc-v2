@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import type { AgentDef, ChatSession, ChatMessage } from '../types.js';
+import type { AgentDef, ChatSession, ChatMessage, Squad, Task, TaskStatus } from '../types.js';
 
 export class ArcDatabase {
   private db: Database.Database;
@@ -48,6 +48,31 @@ export class ArcDatabase {
       CREATE INDEX IF NOT EXISTS idx_sessions_agent ON chat_sessions(agent_id);
       CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_id);
       CREATE INDEX IF NOT EXISTS idx_messages_created ON chat_messages(created_at);
+
+      CREATE TABLE IF NOT EXISTS squads (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        agent_ids TEXT NOT NULL DEFAULT '[]',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        squad_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending',
+        assigned_agent_id TEXT,
+        result TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (squad_id) REFERENCES squads(id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_tasks_squad ON tasks(squad_id);
+      CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     `);
   }
 
@@ -170,6 +195,109 @@ export class ArcDatabase {
       content: row.content,
       createdAt: row.created_at,
     }));
+  }
+
+  // ── Squads ──
+  createSquad(squad: Squad): void {
+    this.db.prepare(`
+      INSERT INTO squads (id, name, description, agent_ids, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(squad.id, squad.name, squad.description, JSON.stringify(squad.agentIds), squad.createdAt, squad.updatedAt);
+  }
+
+  getSquad(id: string): Squad | undefined {
+    const row = this.db.prepare('SELECT * FROM squads WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this.rowToSquad(row);
+  }
+
+  listSquads(): Squad[] {
+    const rows = this.db.prepare('SELECT * FROM squads ORDER BY name ASC').all() as any[];
+    return rows.map(r => this.rowToSquad(r));
+  }
+
+  updateSquad(id: string, updates: Partial<Pick<Squad, 'name' | 'description' | 'agentIds'>>): void {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name); }
+    if (updates.description !== undefined) { fields.push('description = ?'); values.push(updates.description); }
+    if (updates.agentIds !== undefined) { fields.push('agent_ids = ?'); values.push(JSON.stringify(updates.agentIds)); }
+    fields.push('updated_at = ?'); values.push(Date.now());
+    values.push(id);
+    this.db.prepare(`UPDATE squads SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  }
+
+  deleteSquad(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM squads WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  private rowToSquad(row: any): Squad {
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      agentIds: JSON.parse(row.agent_ids),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  // ── Tasks ──
+  createTask(task: Task): void {
+    this.db.prepare(`
+      INSERT INTO tasks (id, squad_id, title, description, status, assigned_agent_id, result, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(task.id, task.squadId, task.title, task.description, task.status,
+      task.assignedAgentId || null, task.result || null, task.createdAt, task.updatedAt);
+  }
+
+  getTask(id: string): Task | undefined {
+    const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as any;
+    if (!row) return undefined;
+    return this.rowToTask(row);
+  }
+
+  listTasks(squadId?: string, status?: TaskStatus): Task[] {
+    let query = 'SELECT * FROM tasks WHERE 1=1';
+    const params: unknown[] = [];
+    if (squadId) { query += ' AND squad_id = ?'; params.push(squadId); }
+    if (status) { query += ' AND status = ?'; params.push(status); }
+    query += ' ORDER BY created_at DESC';
+    const rows = this.db.prepare(query).all(...params) as any[];
+    return rows.map(r => this.rowToTask(r));
+  }
+
+  updateTask(id: string, updates: Partial<Pick<Task, 'title' | 'description' | 'status' | 'assignedAgentId' | 'result'>>): void {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    if (updates.title !== undefined) { fields.push('title = ?'); values.push(updates.title); }
+    if (updates.description !== undefined) { fields.push('description = ?'); values.push(updates.description); }
+    if (updates.status !== undefined) { fields.push('status = ?'); values.push(updates.status); }
+    if (updates.assignedAgentId !== undefined) { fields.push('assigned_agent_id = ?'); values.push(updates.assignedAgentId); }
+    if (updates.result !== undefined) { fields.push('result = ?'); values.push(updates.result); }
+    fields.push('updated_at = ?'); values.push(Date.now());
+    values.push(id);
+    this.db.prepare(`UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  }
+
+  deleteTask(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  private rowToTask(row: any): Task {
+    return {
+      id: row.id,
+      squadId: row.squad_id,
+      title: row.title,
+      description: row.description,
+      status: row.status,
+      assignedAgentId: row.assigned_agent_id || undefined,
+      result: row.result || undefined,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
   }
 
   close(): void {

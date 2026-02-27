@@ -7,6 +7,8 @@ import type { ChatManager } from './communication/chat-manager.js';
 import { createAgentRoutes } from './api/agents.js';
 import { createChatRoutes } from './api/chat.js';
 import { createStatusRoutes } from './api/status.js';
+import { createSquadRoutes } from './api/squads.js';
+import { createTaskRoutes } from './api/tasks.js';
 
 export function createApp(
   db: ArcDatabase,
@@ -37,6 +39,8 @@ export function createApp(
   app.use('/api/agents', createAgentRoutes(registry));
   app.use('/api/chat', createChatRoutes(chatManager, registry));
   app.use('/api/status', createStatusRoutes(db, registry, chatManager));
+  app.use('/api/squads', createSquadRoutes(db, registry));
+  app.use('/api/tasks', createTaskRoutes(db, chatManager, registry));
 
   // 404 handler
   app.use((_req: Request, res: Response) => {
