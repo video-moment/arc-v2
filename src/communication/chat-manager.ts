@@ -15,9 +15,13 @@ export class ChatManager {
     this.db = db;
     this.bus = new MessageBus();
     this.runner = new AgentRunner();
+
+    // Pipe agent stdout chunks to message bus for WS streaming
+    this.runner.on('stdout', ({ sessionId, chunk }: { sessionId: string; chunk: string }) => {
+      this.bus.emitAgentChunk(sessionId, chunk);
+    });
   }
 
-  /** Create a new chat session */
   createSession(agentId: string, title?: string): ChatSession {
     const now = Date.now();
     const session: ChatSession = {
@@ -54,11 +58,13 @@ export class ChatManager {
     return this.db.getMessages(sessionId);
   }
 
-  /** Send a user message and get agent response */
-  async sendMessage(sessionId: string, content: string, agent: AgentDef): Promise<ChatMessage> {
+  /**
+   * Save user message and start agent (fire-and-forget).
+   * Returns the user message immediately. Agent response streams via WS.
+   */
+  sendMessageAsync(sessionId: string, content: string, agent: AgentDef): ChatMessage {
     const now = Date.now();
 
-    // Save user message
     const userMsg: ChatMessage = {
       id: uuid(),
       sessionId,
@@ -76,12 +82,43 @@ export class ChatManager {
       this.db.updateSession(sessionId, { title, updatedAt: now });
     }
 
-    // Run agent
+    // Fire-and-forget: run agent in background
+    this.runAgent(sessionId, content, agent);
+
+    return userMsg;
+  }
+
+  /**
+   * Send user message and wait for full agent response.
+   * Used for non-streaming clients.
+   */
+  async sendMessageSync(sessionId: string, content: string, agent: AgentDef): Promise<ChatMessage> {
+    const now = Date.now();
+
+    const userMsg: ChatMessage = {
+      id: uuid(),
+      sessionId,
+      role: 'user',
+      content,
+      createdAt: now,
+    };
+    this.db.saveMessage(userMsg);
+    this.bus.emitChatMessage(userMsg);
+
+    const session = this.db.getSession(sessionId);
+    if (session && session.title === 'New Chat') {
+      const title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
+      this.db.updateSession(sessionId, { title, updatedAt: now });
+    }
+
+    return this.runAgent(sessionId, content, agent);
+  }
+
+  private async runAgent(sessionId: string, content: string, agent: AgentDef): Promise<ChatMessage> {
     this.bus.emitAgentTyping(sessionId);
 
     try {
       const history = this.db.getMessages(sessionId);
-      // Exclude the user message we just saved (it's in history now) for prompt building
       const prevHistory = history.slice(0, -1);
       const prompt = buildPrompt(prevHistory, content);
 
@@ -97,8 +134,6 @@ export class ChatManager {
       this.db.saveMessage(assistantMsg);
       this.bus.emitChatMessage(assistantMsg);
       this.bus.emitAgentDone(sessionId);
-
-      // Update session timestamp
       this.db.updateSession(sessionId, { updatedAt: Date.now() });
 
       return assistantMsg;

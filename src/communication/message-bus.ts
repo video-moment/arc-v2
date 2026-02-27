@@ -32,6 +32,13 @@ export class MessageBus extends EventEmitter {
     } satisfies BusEvent);
   }
 
+  emitAgentChunk(sessionId: string, chunk: string): void {
+    this.emit('event', {
+      type: 'agent_chunk' as WsEventType,
+      payload: { sessionId, chunk },
+    } satisfies BusEvent);
+  }
+
   emitAgentTyping(sessionId: string): void {
     this.emit('event', {
       type: 'agent_typing' as WsEventType,

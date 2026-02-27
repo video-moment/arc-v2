@@ -38,6 +38,7 @@ export type WsEventType =
   | 'session_created'
   | 'session_updated'
   | 'agent_typing'
+  | 'agent_chunk'
   | 'agent_done'
   | 'error';
 
