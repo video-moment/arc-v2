@@ -4,8 +4,10 @@ const PASSWORD = process.env.SITE_PASSWORD || 'Are100412';
 const COOKIE_NAME = 'arc-auth';
 
 export function middleware(request: NextRequest) {
-  // 인증 API는 통과
-  if (request.nextUrl.pathname === '/api/auth') {
+  const { pathname } = request.nextUrl;
+
+  // 인증 불필요 경로
+  if (pathname.startsWith('/api/') || pathname === '/login') {
     return NextResponse.next();
   }
 
@@ -16,13 +18,9 @@ export function middleware(request: NextRequest) {
   }
 
   // 인증 안 됨 → 로그인 페이지로
-  if (request.nextUrl.pathname !== '/login') {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  return NextResponse.next();
+  return NextResponse.redirect(new URL('/login', request.url));
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|login).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

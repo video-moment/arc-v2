@@ -1,30 +1,33 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    const res = await fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
 
-    if (res.ok) {
-      router.push('/');
-      router.refresh();
-    } else {
-      setError('비밀번호가 틀렸습니다');
+      if (res.ok) {
+        // 쿠키 설정 후 전체 페이지 이동 (미들웨어가 새 쿠키를 읽도록)
+        window.location.href = '/';
+      } else {
+        setError('비밀번호가 틀렸습니다');
+        setLoading(false);
+      }
+    } catch {
+      setError('연결 오류가 발생했습니다');
       setLoading(false);
     }
   };
