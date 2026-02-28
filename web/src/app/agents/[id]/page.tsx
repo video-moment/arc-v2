@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getAgent, getSessions, createSession, getMessages, sendMessage, type Agent, type ChatMessage } from '@/lib/api';
+import { getAgent, getSessions, createSession, getMessages, sendMessage, sendTelegram, type Agent, type ChatMessage } from '@/lib/api';
 import { useRealtimeMessages } from '@/lib/ws';
 import ChatBubble from '@/components/ChatBubble';
 import StatusBadge from '@/components/StatusBadge';
@@ -73,9 +73,12 @@ export default function AgentChatPage() {
     setSendError('');
     setInput('');
     try {
+      // Supabase에 저장 + 텔레그램으로도 전송
       const msg = await sendMessage(sessionId, text);
       seenIds.current.add(msg.id);
       setMessages(prev => [...prev, msg]);
+      // 텔레그램 전송 (실패해도 메시지는 이미 저장됨)
+      sendTelegram(id, text).catch(() => {});
     } catch (err: any) {
       console.error('Send error:', err);
       setSendError(err?.message || '메시지 전송 실패');
