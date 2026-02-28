@@ -173,6 +173,14 @@ export async function POST(req: NextRequest) {
       if (!error) synced++;
     }
 
+    // 6시간 지난 메시지 자동 삭제
+    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+    await supabase
+      .from('chat_messages')
+      .delete()
+      .eq('session_id', sessionId)
+      .lt('created_at', sixHoursAgo);
+
     return NextResponse.json({ ok: true, synced, sessionId });
   } catch (err: any) {
     console.error('[telegram/sync]', err);

@@ -168,10 +168,12 @@ export async function createSession(agentId: string, title: string): Promise<Cha
 // ── Messages ──
 
 export async function getMessages(sessionId: string): Promise<ChatMessage[]> {
+  const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from('chat_messages')
     .select('*')
     .eq('session_id', sessionId)
+    .gte('created_at', sixHoursAgo)
     .order('created_at');
   if (error) throw error;
   return (data || []).map(toMessage);
