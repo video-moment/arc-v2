@@ -112,15 +112,40 @@ export default function AgentChatPage() {
 
   useRealtimeMessages(sessionId, handleNewMessage);
 
-  // 텔레그램 메시지 주기적 동기화 (3초마다)
+  // 텔레그램 메시지 주기적 동기화 (탭 활성 시에만 3초마다)
   useEffect(() => {
     if (!id) return;
-    const interval = setInterval(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const doSync = () => {
       if (syncingRef.current) return;
       syncingRef.current = true;
       syncTelegram(id).catch(() => {}).finally(() => { syncingRef.current = false; });
-    }, 3000);
-    return () => clearInterval(interval);
+    };
+
+    const startPolling = () => {
+      if (interval) return;
+      doSync(); // 복귀 시 즉시 1회
+      interval = setInterval(doSync, 3000);
+    };
+
+    const stopPolling = () => {
+      if (interval) { clearInterval(interval); interval = null; }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') startPolling();
+      else stopPolling();
+    };
+
+    // 초기: 탭이 보이면 시작
+    if (document.visibilityState === 'visible') startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [id]);
 
   useEffect(() => {
