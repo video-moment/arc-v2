@@ -3,24 +3,28 @@ delete process.env['CLAUDECODE'];
 delete process.env['CLAUDE_CODE_ENTRYPOINT'];
 
 import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { ArcDatabase } from '../db/database.js';
-import { Monitor } from '../communication/monitor.js';
 import { TOOL_DEFINITIONS, handleToolCall } from './tools.js';
 
-const DB_PATH = process.env.DB_PATH || './data/arc.db';
+const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const db = new ArcDatabase(DB_PATH);
-const monitor = new Monitor(db);
-const deps = { db, monitor };
+if (!supabaseUrl || !supabaseKey) {
+  console.error('Missing SUPABASE_URL or SUPABASE_ANON_KEY environment variables');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+const deps = { supabase };
 
 const server = new Server(
-  { name: 'arc-monitor-mcp', version: '1.0.0' },
+  { name: 'arc-monitor-mcp', version: '2.0.0' },
   { capabilities: { tools: {} } },
 );
 
@@ -37,6 +41,5 @@ const transport = new StdioServerTransport();
 await server.connect(transport);
 
 process.on('SIGINT', () => {
-  db.close();
   process.exit(0);
 });

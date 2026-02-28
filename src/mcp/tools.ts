@@ -1,12 +1,9 @@
 import { v4 as uuid } from 'uuid';
-import type { ArcDatabase } from '../db/database.js';
-import type { Monitor } from '../communication/monitor.js';
-import type { Agent, AgentType } from '../types.js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-export interface McpDeps {
-  db: ArcDatabase;
-  monitor: Monitor;
-}
+export type McpDeps = {
+  supabase: SupabaseClient;
+};
 
 export const TOOL_DEFINITIONS = [
   {
@@ -28,12 +25,12 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'arc_push_message',
-    description: 'Push a conversation message into ARC (agent → ARC). Stored in DB and broadcast via WebSocket.',
+    description: 'Push a conversation message into ARC. Stored in Supabase and visible on the web dashboard in real-time.',
     inputSchema: {
       type: 'object' as const,
       properties: {
-        sessionId: { type: 'string', description: 'Chat session ID' },
-        agentId: { type: 'string', description: 'Agent ID (creates session if sessionId not provided)' },
+        sessionId: { type: 'string', description: 'Chat session ID (auto-creates if not provided + agentId given)' },
+        agentId: { type: 'string', description: 'Agent ID (used to auto-create session)' },
         role: { type: 'string', description: 'Message role (user, assistant, or agent name)' },
         content: { type: 'string', description: 'Message content' },
       },
@@ -42,7 +39,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'arc_heartbeat',
-    description: 'Report agent status/heartbeat. Updates lastSeen and status.',
+    description: 'Report agent status/heartbeat. Updates last_seen and status.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -71,13 +68,24 @@ export const TOOL_DEFINITIONS = [
       required: ['sessionId'],
     },
   },
+  {
+    name: 'arc_list_sessions',
+    description: 'List chat sessions, optionally filtered by agent ID.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        agentId: { type: 'string', description: 'Filter by agent ID (optional)' },
+      },
+    },
+  },
 ];
 
-export function handleToolCall(
+export async function handleToolCall(
   name: string,
   args: Record<string, unknown>,
   deps: McpDeps,
-): { content: Array<{ type: 'text'; text: string }> } {
+): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+  const { supabase } = deps;
   const text = (data: unknown) => ({
     content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
   });
@@ -85,27 +93,28 @@ export function handleToolCall(
   switch (name) {
     case 'arc_register_agent': {
       const { id, name: agentName, description, type, telegramBotToken, telegramChatId, metadata } = args as {
-        id: string; name: string; description?: string; type?: AgentType;
+        id: string; name: string; description?: string; type?: string;
         telegramBotToken?: string; telegramChatId?: string; metadata?: Record<string, unknown>;
       };
-      const now = Date.now();
-      const existing = deps.db.getAgent(id);
-      const agent: Agent = {
-        id,
-        name: agentName,
-        description: description || '',
-        type: (type as AgentType) || 'custom',
-        telegramBotToken,
-        telegramChatId,
-        status: 'online',
-        lastSeen: now,
-        metadata,
-        createdAt: existing?.createdAt || now,
-        updatedAt: now,
-      };
-      deps.db.upsertAgent(agent);
-      deps.monitor.bus.emitAgentStatus(id, 'online');
-      return text({ agent, registered: true });
+
+      const { data, error } = await supabase
+        .from('agents')
+        .upsert({
+          id,
+          name: agentName,
+          description: description || '',
+          type: type || 'custom',
+          telegram_bot_token: telegramBotToken,
+          telegram_chat_id: telegramChatId,
+          status: 'online',
+          last_seen: new Date().toISOString(),
+          metadata: metadata || {},
+        }, { onConflict: 'id' })
+        .select()
+        .single();
+
+      if (error) return text({ error: error.message });
+      return text({ agent: data, registered: true });
     }
 
     case 'arc_push_message': {
@@ -115,34 +124,86 @@ export function handleToolCall(
 
       // Auto-create session if needed
       if (!sessionId && agentId) {
-        const session = deps.monitor.createSession(agentId);
+        const { data: session, error: sessErr } = await supabase
+          .from('chat_sessions')
+          .insert({
+            id: uuid(),
+            agent_id: agentId,
+            title: content.slice(0, 50) + (content.length > 50 ? '...' : ''),
+            status: 'active',
+          })
+          .select()
+          .single();
+
+        if (sessErr) return text({ error: sessErr.message });
         sessionId = session.id;
       }
+
       if (!sessionId) {
         return text({ error: 'Either sessionId or agentId is required' });
       }
 
-      const message = deps.monitor.receiveMessage(sessionId, role, content);
-      return text({ message, pushed: true });
+      const { data: message, error } = await supabase
+        .from('chat_messages')
+        .insert({
+          id: uuid(),
+          session_id: sessionId,
+          role,
+          content,
+        })
+        .select()
+        .single();
+
+      if (error) return text({ error: error.message });
+      return text({ message, sessionId, pushed: true });
     }
 
     case 'arc_heartbeat': {
       const { agentId, status } = args as { agentId: string; status?: string };
-      const agentStatus = (status as 'online' | 'offline' | 'error') || 'online';
-      deps.db.updateAgentStatus(agentId, agentStatus);
-      deps.monitor.bus.emitAgentStatus(agentId, agentStatus);
-      return text({ agentId, status: agentStatus, lastSeen: Date.now() });
+      const agentStatus = status || 'online';
+
+      const { error } = await supabase
+        .from('agents')
+        .update({
+          status: agentStatus,
+          last_seen: new Date().toISOString(),
+        })
+        .eq('id', agentId);
+
+      if (error) return text({ error: error.message });
+      return text({ agentId, status: agentStatus, lastSeen: new Date().toISOString() });
     }
 
     case 'arc_list_agents': {
-      const agents = deps.db.listAgents();
-      return text({ agents, count: agents.length });
+      const { data, error } = await supabase
+        .from('agents')
+        .select('*')
+        .order('name');
+
+      if (error) return text({ error: error.message });
+      return text({ agents: data, count: data.length });
     }
 
     case 'arc_get_messages': {
       const { sessionId } = args as { sessionId: string };
-      const messages = deps.monitor.getMessages(sessionId);
-      return text({ messages, count: messages.length });
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true });
+
+      if (error) return text({ error: error.message });
+      return text({ messages: data, count: data.length });
+    }
+
+    case 'arc_list_sessions': {
+      const { agentId } = args as { agentId?: string };
+      let query = supabase.from('chat_sessions').select('*').order('updated_at', { ascending: false });
+      if (agentId) query = query.eq('agent_id', agentId);
+
+      const { data, error } = await query;
+      if (error) return text({ error: error.message });
+      return text({ sessions: data, count: data.length });
     }
 
     default:
