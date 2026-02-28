@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState } from 'react';
 import { getTasks, getSquads, createTask, updateTask, deleteTask, type Task, type Squad } from '@/lib/api';
 import TaskCard from '@/components/TaskCard';

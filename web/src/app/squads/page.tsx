@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState } from 'react';
 import { getSquads, getAgents, createSquad, deleteSquad, type Squad, type Agent } from '@/lib/api';
 import StatusBadge from '@/components/StatusBadge';

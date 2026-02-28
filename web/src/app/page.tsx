@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState } from 'react';
 import { getAgents, type Agent } from '@/lib/api';
 import AgentCard from '@/components/AgentCard';
