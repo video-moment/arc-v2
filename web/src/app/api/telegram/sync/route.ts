@@ -109,11 +109,16 @@ export async function POST(req: NextRequest) {
       if (!msg.message) continue;
 
       const senderId = String(msg.senderId?.valueOf() ?? '');
-      const role = senderId === String(botId) ? 'assistant' : 'user';
-      const key = role + '::' + msg.message;
+      const isBot = senderId === String(botId);
 
+      // 봇 답변만 동기화 (사용자 메시지는 대시보드에서 이미 저장됨)
+      if (!isBot) continue;
+
+      const key = 'assistant::' + msg.message;
       if (existingSet.has(key)) continue;
       existingSet.add(key);
+
+      const role = 'assistant';
 
       const { error } = await supabase.from('chat_messages').insert({
         session_id: sessionId,
