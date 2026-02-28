@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await client.sendMessage(botUsername, {
-      message: '\u{1F4CB} [대시보드]\n' + message,
+      message,
     });
 
     return NextResponse.json({ ok: true, messageId: result.id });
