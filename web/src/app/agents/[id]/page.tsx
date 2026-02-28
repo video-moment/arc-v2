@@ -19,6 +19,7 @@ export default function AgentChatPage() {
   const [loading, setLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const seenIds = useRef(new Set<string>());
+  const syncingRef = useRef(false);
 
   // 에이전트 로드 + 세션 자동 생성/조회
   useEffect(() => {
@@ -32,10 +33,8 @@ export default function AgentChatPage() {
 
         let sid: string;
         if (sessions.length > 0) {
-          // 가장 최근 세션 사용
           sid = sessions[0].id;
         } else {
-          // 세션 자동 생성
           const newSession = await createSession(id, agentData.name + ' 대화');
           sid = newSession.id;
         }
@@ -44,6 +43,9 @@ export default function AgentChatPage() {
         const msgs = await getMessages(sid);
         setMessages(msgs);
         msgs.forEach(m => seenIds.current.add(m.id));
+
+        // 페이지 로드 시 1회 동기화
+        syncTelegram(id).catch(() => {});
       } catch (err) {
         console.error(err);
       } finally {
@@ -61,15 +63,6 @@ export default function AgentChatPage() {
 
   useRealtimeMessages(sessionId, handleNewMessage);
 
-  // 텔레그램 메시지 주기적 동기화 (5초마다)
-  useEffect(() => {
-    if (!id) return;
-    const interval = setInterval(() => {
-      syncTelegram(id).catch(() => {});
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [id]);
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -82,12 +75,24 @@ export default function AgentChatPage() {
     setSendError('');
     setInput('');
     try {
-      // Supabase에 저장 + 텔레그램으로도 전송
+      // Supabase에 저장
       const msg = await sendMessage(sessionId, text);
       seenIds.current.add(msg.id);
       setMessages(prev => [...prev, msg]);
-      // 텔레그램 전송 (실패해도 메시지는 이미 저장됨)
-      sendTelegram(id, text).catch(() => {});
+
+      // 텔레그램 전송
+      await sendTelegram(id, text);
+
+      // 봇 답변 대기 후 1회 동기화 (잠금으로 중복 방지)
+      setTimeout(async () => {
+        if (syncingRef.current) return;
+        syncingRef.current = true;
+        try {
+          await syncTelegram(id);
+        } finally {
+          syncingRef.current = false;
+        }
+      }, 3000);
     } catch (err: any) {
       console.error('Send error:', err);
       setSendError(err?.message || '메시지 전송 실패');
