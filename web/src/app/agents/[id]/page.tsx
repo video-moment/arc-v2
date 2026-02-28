@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getAgent, getSessions, createSession, getMessages, sendMessage, sendTelegram, type Agent, type ChatMessage } from '@/lib/api';
+import { getAgent, getSessions, createSession, getMessages, sendMessage, type Agent, type ChatMessage } from '@/lib/api';
 import { useRealtimeMessages } from '@/lib/ws';
 import ChatBubble from '@/components/ChatBubble';
 import StatusBadge from '@/components/StatusBadge';
@@ -16,7 +16,6 @@ export default function AgentChatPage() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
-  const [sendViaTelegram, setSendViaTelegram] = useState(false);
   const [loading, setLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const seenIds = useRef(new Set<string>());
@@ -74,9 +73,6 @@ export default function AgentChatPage() {
     setSendError('');
     setInput('');
     try {
-      if (sendViaTelegram) {
-        await sendTelegram(id, text);
-      }
       const msg = await sendMessage(sessionId, text);
       seenIds.current.add(msg.id);
       setMessages(prev => [...prev, msg]);
@@ -161,31 +157,6 @@ export default function AgentChatPage() {
         {sendError && (
           <p className="text-xs mb-2 px-1" style={{ color: 'var(--red)' }}>{sendError}</p>
         )}
-        <div className="flex items-center gap-3 mb-3">
-          <label className="flex items-center gap-2 cursor-pointer select-none group">
-            <div
-              className="relative w-8 h-[18px] rounded-full transition-colors"
-              style={{ background: sendViaTelegram ? 'var(--accent)' : 'var(--bg-hover)' }}
-            >
-              <div
-                className="absolute top-0.5 w-3.5 h-3.5 rounded-full transition-all duration-200"
-                style={{
-                  background: 'white',
-                  left: sendViaTelegram ? '16px' : '2px',
-                }}
-              />
-              <input
-                type="checkbox"
-                checked={sendViaTelegram}
-                onChange={e => setSendViaTelegram(e.target.checked)}
-                className="sr-only"
-              />
-            </div>
-            <span className="text-[12px] font-medium" style={{ color: sendViaTelegram ? 'var(--accent-hover)' : 'var(--text-tertiary)' }}>
-              텔레그램으로 전송
-            </span>
-          </label>
-        </div>
         <div className="flex gap-2">
           <input
             value={input}
