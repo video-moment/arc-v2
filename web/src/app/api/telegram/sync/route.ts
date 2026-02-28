@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
       .eq('session_id', sessionId);
 
     const existingSet = new Set(
-      (existing || []).map((m: any) => m.role + '::' + m.content)
+      (existing || []).map((m: any) => m.role + '::' + m.content + '::' + Math.floor(new Date(m.created_at).getTime() / 1000))
     );
 
     // 새 메시지만 저장 (오래된 순서로)
