@@ -1,3 +1,8 @@
+'use client';
+
+import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '@/lib/api';
 
 function formatTime(ts: string | number): string {
@@ -45,9 +50,18 @@ function MediaContent({ message }: { message: ChatMessage }) {
 
 export default function ChatBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {}
+  };
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 animate-fade-in`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 animate-fade-in group`}>
       {!isUser && (
         <div
           className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold mr-2 mt-1 shrink-0"
@@ -63,23 +77,46 @@ export default function ChatBubble({ message }: { message: ChatMessage }) {
           </p>
         )}
         <div
-          className="rounded-2xl px-4 py-3"
+          className="rounded-2xl px-4 py-3 relative cursor-pointer"
           style={{
             background: isUser ? 'var(--gradient-accent)' : 'var(--bg-card)',
             border: isUser ? 'none' : '1px solid var(--border)',
             borderTopRightRadius: isUser ? '6px' : undefined,
             borderTopLeftRadius: !isUser ? '6px' : undefined,
           }}
+          onClick={handleCopy}
+          title="클릭하여 복사"
         >
+          {/* 복사 완료 토스트 */}
+          {copied && (
+            <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-lg text-[11px] font-medium animate-fade-in"
+              style={{ background: 'var(--green)', color: 'white' }}>
+              복사됨
+            </div>
+          )}
+          {/* 복사 아이콘 (호버 시) */}
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-60 transition-opacity">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          </div>
           {message.mediaUrl && (
             <div className={message.content ? 'mb-2' : ''}>
               <MediaContent message={message} />
             </div>
           )}
           {message.content && (
-            <p className="text-[13px] leading-relaxed whitespace-pre-wrap break-words">
-              {message.content}
-            </p>
+            isUser ? (
+              <p className="text-[13px] leading-relaxed whitespace-pre-wrap break-words">
+                {message.content}
+              </p>
+            ) : (
+              <div className="markdown-body text-[13px] leading-relaxed break-words">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {message.content}
+                </ReactMarkdown>
+              </div>
+            )
           )}
         </div>
         <p className={`text-[10px] mt-1 ${isUser ? 'text-right mr-1' : 'ml-1'}`} style={{ color: 'var(--text-tertiary)' }}>

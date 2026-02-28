@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
 import { getAgents, type Agent } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import AgentCard from '@/components/AgentCard';
 
 export default function HomePage() {
@@ -15,6 +16,27 @@ export default function HomePage() {
       .then(setAgents)
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    // 에이전트 상태 실시간 구독
+    const channel = supabase
+      .channel('agents-status')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'agents' },
+        (payload) => {
+          const updated = payload.new;
+          setAgents(prev =>
+            prev.map(a =>
+              a.id === updated.id
+                ? { ...a, status: updated.status, lastSeen: updated.last_seen }
+                : a
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const online = agents.filter(a => a.status === 'online');

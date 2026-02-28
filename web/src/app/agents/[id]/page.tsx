@@ -9,6 +9,29 @@ import ChatBubble from '@/components/ChatBubble';
 import StatusBadge from '@/components/StatusBadge';
 import TypingIndicator from '@/components/TypingIndicator';
 
+function formatDateLabel(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const msgDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diff = today.getTime() - msgDate.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  if (days === 0) return '오늘';
+  if (days === 1) return '어제';
+  return `${date.getMonth() + 1}월 ${date.getDate()}일`;
+}
+
+function DateSeparator({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 my-4">
+      <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+      <span className="text-[11px] font-medium px-2" style={{ color: 'var(--text-tertiary)' }}>{label}</span>
+      <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+    </div>
+  );
+}
+
 export default function AgentChatPage() {
   const { id } = useParams<{ id: string }>();
   const [agent, setAgent] = useState<Agent | null>(null);
@@ -20,7 +43,10 @@ export default function AgentChatPage() {
   const [loading, setLoading] = useState(true);
   const [waitingReply, setWaitingReply] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const seenIds = useRef(new Set<string>());
   const syncingRef = useRef(false);
   const originalTitle = useRef('');
@@ -81,6 +107,18 @@ export default function AgentChatPage() {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
+  // 스크롤 위치 감지 — 바닥에서 멀면 스크롤 버튼 표시
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      setShowScrollBtn(distFromBottom > 200);
+    };
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const handleNewMessage = useCallback((msg: ChatMessage) => {
     if (!seenIds.current.has(msg.id)) {
       seenIds.current.add(msg.id);
@@ -125,7 +163,7 @@ export default function AgentChatPage() {
 
     const startPolling = () => {
       if (interval) return;
-      doSync(); // 복귀 시 즉시 1회
+      doSync();
       interval = setInterval(doSync, 3000);
     };
 
@@ -138,7 +176,6 @@ export default function AgentChatPage() {
       else stopPolling();
     };
 
-    // 초기: 탭이 보이면 시작
     if (document.visibilityState === 'visible') startPolling();
     document.addEventListener('visibilitychange', handleVisibility);
 
@@ -149,8 +186,22 @@ export default function AgentChatPage() {
   }, [id]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!showScrollBtn) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, waitingReply]);
+
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // textarea 자동 높이 조절
+  const adjustTextareaHeight = () => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+  };
 
   const handleSend = async () => {
     const text = input.trim();
@@ -159,19 +210,16 @@ export default function AgentChatPage() {
     setSending(true);
     setSendError('');
     setInput('');
+    if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
     try {
-      // Supabase에 저장
       const msg = await sendMessage(sessionId, text);
       seenIds.current.add(msg.id);
       setMessages(prev => [...prev, msg]);
 
-      // 텔레그램 전송
       await sendTelegram(id, text);
 
-      // 타이핑 인디케이터 표시
       setWaitingReply(true);
 
-      // 봇 답변 대기 후 1회 동기화 (잠금으로 중복 방지)
       setTimeout(async () => {
         if (syncingRef.current) return;
         syncingRef.current = true;
@@ -188,6 +236,29 @@ export default function AgentChatPage() {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  // 날짜 구분선 삽입을 위한 메시지 + 날짜 매핑
+  const renderMessages = () => {
+    const items: React.ReactNode[] = [];
+    let lastDate = '';
+
+    for (const m of messages) {
+      const msgDate = new Date(m.createdAt).toDateString();
+      if (msgDate !== lastDate) {
+        lastDate = msgDate;
+        items.push(<DateSeparator key={'date-' + msgDate} label={formatDateLabel(m.createdAt)} />);
+      }
+      items.push(<ChatBubble key={m.id} message={m} />);
+    }
+    return items;
   };
 
   if (loading) {
@@ -241,7 +312,7 @@ export default function AgentChatPage() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto pr-2 pb-4">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pr-2 pb-4 relative">
         {messages.length === 0 && !waitingReply && (
           <div className="text-center py-24">
             <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
@@ -253,9 +324,22 @@ export default function AgentChatPage() {
             <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>메시지를 보내거나 텔레그램에서 대화를 시작하세요</p>
           </div>
         )}
-        {messages.map(m => <ChatBubble key={m.id} message={m} />)}
+        {renderMessages()}
         {waitingReply && <TypingIndicator />}
         <div ref={bottomRef} />
+
+        {/* 스크롤 투 바텀 버튼 */}
+        {showScrollBtn && (
+          <button
+            onClick={scrollToBottom}
+            className="sticky bottom-4 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:brightness-110 cursor-pointer animate-fade-in"
+            style={{ background: 'var(--accent)', boxShadow: '0 4px 12px rgba(139,92,246,0.4)' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12l7 7 7-7"/>
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Input */}
@@ -263,19 +347,21 @@ export default function AgentChatPage() {
         {sendError && (
           <p className="text-xs mb-2 px-1" style={{ color: 'var(--red)' }}>{sendError}</p>
         )}
-        <div className="flex gap-2">
-          <input
+        <div className="flex gap-2 items-end">
+          <textarea
+            ref={textareaRef}
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder="메시지를 입력하세요..."
-            className="flex-1 rounded-xl px-4 py-3.5 text-sm outline-none transition-all duration-150 focus:ring-2 focus:ring-[var(--accent)]/30"
-            style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+            onChange={e => { setInput(e.target.value); adjustTextareaHeight(); }}
+            onKeyDown={handleKeyDown}
+            placeholder="메시지를 입력하세요... (Shift+Enter로 줄바꿈)"
+            rows={1}
+            className="flex-1 rounded-xl px-4 py-3.5 text-sm outline-none transition-all duration-150 focus:ring-2 focus:ring-[var(--accent)]/30 resize-none"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)', maxHeight: '120px' }}
           />
           <button
             onClick={handleSend}
             disabled={sending || !input.trim()}
-            className="px-5 py-3.5 rounded-xl text-sm font-semibold transition-all duration-150 disabled:opacity-30 cursor-pointer hover:brightness-110"
+            className="px-5 py-3.5 rounded-xl text-sm font-semibold transition-all duration-150 disabled:opacity-30 cursor-pointer hover:brightness-110 shrink-0"
             style={{ background: 'var(--gradient-accent)', color: 'white', boxShadow: '0 2px 8px rgba(139,92,246,0.25)' }}
           >
             {sending ? (
