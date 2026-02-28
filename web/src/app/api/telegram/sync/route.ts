@@ -106,20 +106,67 @@ export async function POST(req: NextRequest) {
     // 새 메시지만 저장 (오래된 순서로)
     let synced = 0;
     for (const msg of [...messages].reverse()) {
-      if (!msg.message) continue;
+      const hasText = !!msg.message;
+      const hasMedia = !!(msg.media);
+      if (!hasText && !hasMedia) continue;
 
       const senderId = String(msg.senderId?.valueOf() ?? '');
       const isBot = senderId === String(botId);
       const role = isBot ? 'assistant' : 'user';
 
-      const key = role + '::' + msg.message;
+      const content = msg.message || '';
+      const key = role + '::' + content + '::' + msg.date;
       if (existingSet.has(key)) continue;
       existingSet.add(key);
+
+      // 미디어 처리
+      let mediaUrl: string | null = null;
+      let mediaType: string | null = null;
+
+      if (hasMedia) {
+        try {
+          const media = msg.media as any;
+          if (media.photo) {
+            mediaType = 'photo';
+          } else if (media.document) {
+            const mime = media.document.mimeType || '';
+            if (mime.startsWith('image/')) mediaType = 'photo';
+            else if (mime.startsWith('video/')) mediaType = 'video';
+            else mediaType = 'document';
+          } else if (media.className === 'MessageMediaDocument' && media.document?.mimeType?.includes('webp')) {
+            mediaType = 'sticker';
+          }
+
+          if (mediaType) {
+            const buffer = await client.downloadMedia(msg, {}) as Buffer;
+            if (buffer && buffer.length > 0) {
+              const ext = mediaType === 'photo' ? 'jpg' : mediaType === 'sticker' ? 'webp' : 'bin';
+              const fileName = `${agentId}/${msg.id}.${ext}`;
+              const { error: uploadError } = await supabase.storage
+                .from('chat-media')
+                .upload(fileName, buffer, {
+                  contentType: mediaType === 'photo' ? 'image/jpeg' : mediaType === 'sticker' ? 'image/webp' : 'application/octet-stream',
+                  upsert: true,
+                });
+              if (!uploadError) {
+                const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(fileName);
+                mediaUrl = urlData.publicUrl;
+              }
+            }
+          }
+        } catch (mediaErr) {
+          console.error('[telegram/sync] media download error:', mediaErr);
+        }
+      }
+
+      if (!content && !mediaUrl) continue;
 
       const { error } = await supabase.from('chat_messages').insert({
         session_id: sessionId,
         role,
-        content: msg.message,
+        content,
+        media_url: mediaUrl,
+        media_type: mediaType,
         created_at: new Date(msg.date * 1000).toISOString(),
       });
 

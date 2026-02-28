@@ -42,6 +42,8 @@ CREATE TABLE chat_messages (
   session_id UUID NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
   role TEXT NOT NULL,
   content TEXT NOT NULL,
+  media_url TEXT,
+  media_type TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

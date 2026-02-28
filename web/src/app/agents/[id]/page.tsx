@@ -7,6 +7,7 @@ import { getAgent, getSessions, createSession, getMessages, sendMessage, sendTel
 import { useRealtimeMessages } from '@/lib/ws';
 import ChatBubble from '@/components/ChatBubble';
 import StatusBadge from '@/components/StatusBadge';
+import TypingIndicator from '@/components/TypingIndicator';
 
 export default function AgentChatPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,12 +18,17 @@ export default function AgentChatPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [waitingReply, setWaitingReply] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const seenIds = useRef(new Set<string>());
   const syncingRef = useRef(false);
+  const originalTitle = useRef('');
 
   // 에이전트 로드 + 세션 자동 생성/조회
   useEffect(() => {
+    originalTitle.current = document.title;
+
     (async () => {
       try {
         const [agentData, sessions] = await Promise.all([
@@ -52,12 +58,55 @@ export default function AgentChatPage() {
         setLoading(false);
       }
     })();
+
+    return () => { document.title = originalTitle.current; };
   }, [id]);
+
+  // 브라우저 알림 권한 요청
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // 탭 복귀 시 읽음 처리
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        setUnreadCount(0);
+        document.title = originalTitle.current;
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
 
   const handleNewMessage = useCallback((msg: ChatMessage) => {
     if (!seenIds.current.has(msg.id)) {
       seenIds.current.add(msg.id);
       setMessages(prev => [...prev, msg]);
+
+      // assistant 메시지 수신 시 타이핑 인디케이터 해제
+      if (msg.role === 'assistant') {
+        setWaitingReply(false);
+      }
+
+      // 탭 비활성 시 읽지 않은 메시지 카운트 + 브라우저 알림
+      if (document.visibilityState === 'hidden' && msg.role === 'assistant') {
+        setUnreadCount(prev => {
+          const next = prev + 1;
+          document.title = `(${next}) ${originalTitle.current}`;
+          return next;
+        });
+
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const n = new Notification('새 메시지', {
+            body: msg.content.slice(0, 100) || '미디어 메시지',
+            icon: '/favicon.ico',
+          });
+          n.onclick = () => { window.focus(); n.close(); };
+        }
+      }
     }
   }, []);
 
@@ -76,7 +125,7 @@ export default function AgentChatPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, waitingReply]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -93,6 +142,9 @@ export default function AgentChatPage() {
 
       // 텔레그램 전송
       await sendTelegram(id, text);
+
+      // 타이핑 인디케이터 표시
+      setWaitingReply(true);
 
       // 봇 답변 대기 후 1회 동기화 (잠금으로 중복 방지)
       setTimeout(async () => {
@@ -165,7 +217,7 @@ export default function AgentChatPage() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto pr-2 pb-4">
-        {messages.length === 0 && (
+        {messages.length === 0 && !waitingReply && (
           <div className="text-center py-24">
             <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -177,6 +229,7 @@ export default function AgentChatPage() {
           </div>
         )}
         {messages.map(m => <ChatBubble key={m.id} message={m} />)}
+        {waitingReply && <TypingIndicator />}
         <div ref={bottomRef} />
       </div>
 

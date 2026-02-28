@@ -10,6 +10,8 @@ function toMessage(row: any): ChatMessage {
     sessionId: row.session_id,
     role: row.role,
     content: row.content,
+    mediaUrl: row.media_url,
+    mediaType: row.media_type,
     createdAt: row.created_at,
   };
 }

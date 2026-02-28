@@ -74,3 +74,17 @@ input::placeholder, textarea::placeholder {
 .animate-pulse-dot {
   animation: pulse-dot 2s ease-in-out infinite;
 }
+
+@keyframes bounce-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-6px); opacity: 1; }
+}
+
+.typing-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  animation: bounce-dot 1.2s ease-in-out infinite;
+}
