@@ -14,6 +14,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
   const [sendViaTelegram, setSendViaTelegram] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const seenIds = useRef(new Set<string>());
@@ -44,6 +45,7 @@ export default function ChatPage() {
     if (!text || sending) return;
 
     setSending(true);
+    setSendError('');
     setInput('');
     try {
       if (sendViaTelegram) {
@@ -52,8 +54,10 @@ export default function ChatPage() {
       const msg = await sendMessage(sessionId, text);
       seenIds.current.add(msg.id);
       setMessages(prev => [...prev, msg]);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Send error:', err);
+      setSendError(err?.message || '메시지 전송 실패');
+      setInput(text);
     } finally {
       setSending(false);
     }
@@ -105,6 +109,9 @@ export default function ChatPage() {
 
       {/* Input */}
       <div className="pt-4" style={{ borderTop: '1px solid var(--border)' }}>
+        {sendError && (
+          <p className="text-xs mb-2 px-1" style={{ color: 'var(--red)' }}>{sendError}</p>
+        )}
         <div className="flex items-center gap-3 mb-3">
           <label className="flex items-center gap-2 cursor-pointer select-none group">
             <div
