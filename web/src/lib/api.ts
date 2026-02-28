@@ -195,6 +195,16 @@ export async function sendTelegram(agentId: string, message: string): Promise<{ 
   return res.json();
 }
 
+export async function syncTelegram(agentId: string): Promise<{ synced: number }> {
+  const res = await fetch('/api/telegram/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentId }),
+  });
+  if (!res.ok) throw new Error('텔레그램 동기화 실패');
+  return res.json();
+}
+
 // ── Squads ──
 
 export async function getSquads(): Promise<Squad[]> {

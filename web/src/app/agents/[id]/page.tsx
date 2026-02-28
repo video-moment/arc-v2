@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getAgent, getSessions, createSession, getMessages, sendMessage, sendTelegram, type Agent, type ChatMessage } from '@/lib/api';
+import { getAgent, getSessions, createSession, getMessages, sendMessage, sendTelegram, syncTelegram, type Agent, type ChatMessage } from '@/lib/api';
 import { useRealtimeMessages } from '@/lib/ws';
 import ChatBubble from '@/components/ChatBubble';
 import StatusBadge from '@/components/StatusBadge';
@@ -60,6 +60,15 @@ export default function AgentChatPage() {
   }, []);
 
   useRealtimeMessages(sessionId, handleNewMessage);
+
+  // 텔레그램 메시지 주기적 동기화 (5초마다)
+  useEffect(() => {
+    if (!id) return;
+    const interval = setInterval(() => {
+      syncTelegram(id).catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
