@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 
     const { data: agent, error } = await supabase
       .from('agents')
-      .select('telegram_bot_token')
+      .select('telegram_bot_token, telegram_chat_id')
       .eq('id', agentId)
       .single();
 
@@ -59,11 +59,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 봇 토큰에서 봇 ID 추출 (토큰 형식: "봇ID:해시")
-    const botId = agent.telegram_bot_token.split(':')[0];
-
     const client = await getClient();
-    const result = await client.sendMessage(botId, {
+
+    // 봇 토큰으로 봇 username 조회 → User API에서 entity resolve
+    const botInfoRes = await fetch(
+      'https://api.telegram.org/bot' + agent.telegram_bot_token + '/getMe'
+    );
+    const botInfo = await botInfoRes.json();
+    const botUsername = botInfo.result?.username;
+
+    if (!botUsername) {
+      return NextResponse.json(
+        { error: '봇 username을 가져올 수 없습니다' },
+        { status: 500 }
+      );
+    }
+
+    const result = await client.sendMessage(botUsername, {
       message: '\u{1F4CB} [대시보드]\n' + message,
     });
 
