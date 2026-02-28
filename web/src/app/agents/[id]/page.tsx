@@ -63,6 +63,17 @@ export default function AgentChatPage() {
 
   useRealtimeMessages(sessionId, handleNewMessage);
 
+  // 텔레그램 메시지 주기적 동기화 (3초마다)
+  useEffect(() => {
+    if (!id) return;
+    const interval = setInterval(() => {
+      if (syncingRef.current) return;
+      syncingRef.current = true;
+      syncTelegram(id).catch(() => {}).finally(() => { syncingRef.current = false; });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [id]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
