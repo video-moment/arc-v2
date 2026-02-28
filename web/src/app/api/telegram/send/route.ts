@@ -48,19 +48,22 @@ export async function POST(req: NextRequest) {
 
     const { data: agent, error } = await supabase
       .from('agents')
-      .select('telegram_chat_id')
+      .select('telegram_bot_token')
       .eq('id', agentId)
       .single();
 
-    if (error || !agent?.telegram_chat_id) {
+    if (error || !agent?.telegram_bot_token) {
       return NextResponse.json(
-        { error: '에이전트의 텔레그램 채팅 ID를 찾을 수 없습니다' },
+        { error: '에이전트의 텔레그램 봇 토큰을 찾을 수 없습니다' },
         { status: 404 }
       );
     }
 
+    // 봇 토큰에서 봇 ID 추출 (토큰 형식: "봇ID:해시")
+    const botId = agent.telegram_bot_token.split(':')[0];
+
     const client = await getClient();
-    const result = await client.sendMessage(agent.telegram_chat_id, {
+    const result = await client.sendMessage(botId, {
       message: '\u{1F4CB} [대시보드]\n' + message,
     });
 
