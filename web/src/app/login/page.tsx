@@ -17,11 +17,14 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
+        credentials: 'include',
       });
 
       if (res.ok) {
-        // 쿠키 설정 후 전체 페이지 이동 (미들웨어가 새 쿠키를 읽도록)
+        // 쿠키 설정 후 약간 대기 → 전체 페이지 이동
+        document.cookie = 'arc-auth=' + password + '; path=/; max-age=' + (60*60*24*30);
         window.location.href = '/';
+        return;
       } else {
         setError('비밀번호가 틀렸습니다');
         setLoading(false);

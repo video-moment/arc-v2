@@ -9,3 +9,4 @@ data/arc.db-shm
 
 web/.next/
 web/node_modules/
+.vercel

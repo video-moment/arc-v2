@@ -108,8 +108,8 @@ export async function POST(req: NextRequest) {
     for (const msg of [...messages].reverse()) {
       if (!msg.message) continue;
 
-      const senderId = msg.senderId?.valueOf();
-      const role = senderId === BigInt(botId) ? 'assistant' : 'user';
+      const senderId = String(msg.senderId?.valueOf() ?? '');
+      const role = senderId === String(botId) ? 'assistant' : 'user';
       const key = role + '::' + msg.message;
 
       if (existingSet.has(key)) continue;
