@@ -59,4 +59,11 @@ export class MessageBus extends EventEmitter {
       payload: { sessionId, error },
     } satisfies BusEvent);
   }
+
+  emitAgentStatus(agentId: string, status: string): void {
+    this.emit('event', {
+      type: 'agent_status' as WsEventType,
+      payload: { agentId, status, timestamp: Date.now() },
+    } satisfies BusEvent);
+  }
 }

@@ -1,0 +1,76 @@
+@import 'tailwindcss';
+
+@font-face {
+  font-family: 'Pretendard';
+  src: url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
+}
+
+:root {
+  --bg-primary: #09090b;
+  --bg-secondary: #0f0f12;
+  --bg-card: #18181b;
+  --bg-elevated: #1e1e23;
+  --bg-hover: #27272a;
+  --bg-input: #131316;
+  --border: #27272a;
+  --border-subtle: #1e1e23;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #71717a;
+  --accent: #8b5cf6;
+  --accent-soft: rgba(139, 92, 246, 0.12);
+  --accent-hover: #a78bfa;
+  --green: #10b981;
+  --green-soft: rgba(16, 185, 129, 0.12);
+  --red: #f43f5e;
+  --red-soft: rgba(244, 63, 94, 0.12);
+  --yellow: #f59e0b;
+  --yellow-soft: rgba(245, 158, 11, 0.12);
+  --blue: #3b82f6;
+  --blue-soft: rgba(59, 130, 246, 0.12);
+  --gradient-accent: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  --gradient-card: linear-gradient(145deg, #18181b 0%, #1a1a1f 100%);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-elevated: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
+}
+
+* {
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}

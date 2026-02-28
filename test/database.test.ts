@@ -23,9 +23,11 @@ describe('ArcDatabase', () => {
       id: 'test-agent',
       name: 'Test Agent',
       description: 'A test agent',
-      systemPrompt: 'You are a test.',
-      model: 'sonnet',
-      maxTurns: 5,
+      type: 'telegram' as const,
+      telegramBotToken: 'tok_123',
+      telegramChatId: '456',
+      status: 'offline' as const,
+      lastSeen: Date.now(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -35,7 +37,9 @@ describe('ArcDatabase', () => {
       const found = db.getAgent('test-agent');
       expect(found).toBeDefined();
       expect(found!.name).toBe('Test Agent');
-      expect(found!.model).toBe('sonnet');
+      expect(found!.type).toBe('telegram');
+      expect(found!.telegramBotToken).toBe('tok_123');
+      expect(found!.status).toBe('offline');
     });
 
     it('lists agents', () => {
@@ -43,6 +47,13 @@ describe('ArcDatabase', () => {
       db.upsertAgent({ ...agent, id: 'agent-2', name: 'Agent 2' });
       const list = db.listAgents();
       expect(list).toHaveLength(2);
+    });
+
+    it('updates agent status', () => {
+      db.upsertAgent(agent);
+      db.updateAgentStatus('test-agent', 'online');
+      const found = db.getAgent('test-agent');
+      expect(found!.status).toBe('online');
     });
 
     it('updates an agent on upsert', () => {
@@ -65,7 +76,8 @@ describe('ArcDatabase', () => {
 
   describe('sessions', () => {
     const agent = {
-      id: 'a1', name: 'A', description: '', systemPrompt: '',
+      id: 'a1', name: 'A', description: '', type: 'custom' as const,
+      status: 'offline' as const, lastSeen: Date.now(),
       createdAt: Date.now(), updatedAt: Date.now(),
     };
 
@@ -105,7 +117,11 @@ describe('ArcDatabase', () => {
 
   describe('messages', () => {
     beforeEach(() => {
-      db.upsertAgent({ id: 'a1', name: 'A', description: '', systemPrompt: '', createdAt: Date.now(), updatedAt: Date.now() });
+      db.upsertAgent({
+        id: 'a1', name: 'A', description: '', type: 'custom',
+        status: 'offline', lastSeen: Date.now(),
+        createdAt: Date.now(), updatedAt: Date.now(),
+      });
       db.createSession({ id: 's1', agentId: 'a1', title: '', status: 'active', createdAt: Date.now(), updatedAt: Date.now() });
     });
 
@@ -116,6 +132,12 @@ describe('ArcDatabase', () => {
       expect(msgs).toHaveLength(2);
       expect(msgs[0].role).toBe('user');
       expect(msgs[1].role).toBe('assistant');
+    });
+
+    it('supports custom role names', () => {
+      db.saveMessage({ id: 'm3', sessionId: 's1', role: 'telegram-bot', content: 'From bot', createdAt: 3000 });
+      const msgs = db.getMessages('s1');
+      expect(msgs[0].role).toBe('telegram-bot');
     });
 
     it('returns empty array for unknown session', () => {

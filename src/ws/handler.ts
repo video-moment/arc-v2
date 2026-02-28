@@ -1,10 +1,10 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'node:http';
-import type { ChatManager } from '../communication/chat-manager.js';
+import type { Monitor } from '../communication/monitor.js';
 import type { BusEvent } from '../communication/message-bus.js';
-import type { ChatMessage, WsEvent } from '../types.js';
+import type { WsEvent } from '../types.js';
 
-export function setupWebSocket(server: Server, chatManager: ChatManager): WebSocketServer {
+export function setupWebSocket(server: Server, monitor: Monitor): WebSocketServer {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
   // Track clients by session
@@ -28,7 +28,7 @@ export function setupWebSocket(server: Server, chatManager: ChatManager): WebSoc
           clientSessions.get(ws)!.add(sid);
 
           // Catch-up: send existing messages
-          const messages = chatManager.getMessages(sid);
+          const messages = monitor.getMessages(sid);
           for (const message of messages) {
             const event: WsEvent = { type: 'chat_message', payload: message };
             ws.send(JSON.stringify(event));
@@ -57,12 +57,19 @@ export function setupWebSocket(server: Server, chatManager: ChatManager): WebSoc
   });
 
   // Listen to message bus events and broadcast
-  chatManager.bus.on('event', (busEvent: BusEvent) => {
+  monitor.bus.on('event', (busEvent: BusEvent) => {
     const payload = busEvent.payload as any;
     const sessionId = payload?.sessionId || payload?.id;
-    if (!sessionId) return;
 
     const wsEvent: WsEvent = { type: busEvent.type, payload: busEvent.payload };
+
+    // agent_status events go to all wildcard subscribers
+    if (busEvent.type === 'agent_status') {
+      broadcastToAll(wss, wsEvent);
+      return;
+    }
+
+    if (!sessionId) return;
     broadcast(sessionClients, sessionId, wsEvent);
   });
 
@@ -93,6 +100,15 @@ function broadcast(
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(data);
       }
+    }
+  }
+}
+
+function broadcastToAll(wss: WebSocketServer, event: WsEvent): void {
+  const data = JSON.stringify(event);
+  for (const ws of wss.clients) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(data);
     }
   }
 }

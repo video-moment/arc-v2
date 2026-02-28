@@ -1,19 +1,17 @@
 import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import type { ArcDatabase } from '../db/database.js';
-import type { AgentRegistry } from '../engine/agent-registry.js';
 import type { Squad } from '../types.js';
 
-export function createSquadRoutes(db: ArcDatabase, registry: AgentRegistry): Router {
+export function createSquadRoutes(db: ArcDatabase): Router {
   const router = Router();
 
   // List squads
   router.get('/', (_req, res) => {
     const squads = db.listSquads();
-    // Enrich with agent details
     const enriched = squads.map(s => ({
       ...s,
-      agents: s.agentIds.map(id => registry.get(id)).filter(Boolean),
+      agents: s.agentIds.map(id => db.getAgent(id)).filter(Boolean),
     }));
     res.json(enriched);
   });
@@ -22,7 +20,7 @@ export function createSquadRoutes(db: ArcDatabase, registry: AgentRegistry): Rou
   router.get('/:id', (req, res) => {
     const squad = db.getSquad(req.params.id);
     if (!squad) return res.status(404).json({ error: 'Squad not found' });
-    const agents = squad.agentIds.map(id => registry.get(id)).filter(Boolean);
+    const agents = squad.agentIds.map(id => db.getAgent(id)).filter(Boolean);
     res.json({ ...squad, agents });
   });
 
@@ -31,10 +29,9 @@ export function createSquadRoutes(db: ArcDatabase, registry: AgentRegistry): Rou
     const { name, description, agentIds } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
 
-    // Validate agent IDs
     const ids: string[] = agentIds || [];
     for (const id of ids) {
-      if (!registry.get(id)) return res.status(400).json({ error: `Agent not found: ${id}` });
+      if (!db.getAgent(id)) return res.status(400).json({ error: `Agent not found: ${id}` });
     }
 
     const now = Date.now();

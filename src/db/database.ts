@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import type { AgentDef, ChatSession, ChatMessage, Squad, Task, TaskStatus } from '../types.js';
+import type { Agent, AgentStatus, ChatSession, ChatMessage, Squad, Task, TaskStatus } from '../types.js';
 
 export class ArcDatabase {
   private db: Database.Database;
@@ -17,11 +17,12 @@ export class ArcDatabase {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT NOT NULL DEFAULT '',
-        system_prompt TEXT NOT NULL DEFAULT '',
-        model TEXT,
-        max_turns INTEGER DEFAULT 10,
-        allowed_tools TEXT,
-        working_dir TEXT,
+        type TEXT NOT NULL DEFAULT 'custom',
+        telegram_bot_token TEXT,
+        telegram_chat_id TEXT,
+        status TEXT NOT NULL DEFAULT 'offline',
+        last_seen INTEGER NOT NULL DEFAULT 0,
+        metadata TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
@@ -77,36 +78,44 @@ export class ArcDatabase {
   }
 
   // ── Agents ──
-  upsertAgent(agent: AgentDef): void {
+  upsertAgent(agent: Agent): void {
     this.db.prepare(`
-      INSERT INTO agents (id, name, description, system_prompt, model, max_turns, allowed_tools, working_dir, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO agents (id, name, description, type, telegram_bot_token, telegram_chat_id, status, last_seen, metadata, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         description = excluded.description,
-        system_prompt = excluded.system_prompt,
-        model = excluded.model,
-        max_turns = excluded.max_turns,
-        allowed_tools = excluded.allowed_tools,
-        working_dir = excluded.working_dir,
+        type = excluded.type,
+        telegram_bot_token = excluded.telegram_bot_token,
+        telegram_chat_id = excluded.telegram_chat_id,
+        status = excluded.status,
+        last_seen = excluded.last_seen,
+        metadata = excluded.metadata,
         updated_at = excluded.updated_at
     `).run(
-      agent.id, agent.name, agent.description, agent.systemPrompt,
-      agent.model || null, agent.maxTurns || 10,
-      agent.allowedTools ? JSON.stringify(agent.allowedTools) : null,
-      agent.workingDir || null, agent.createdAt, agent.updatedAt
+      agent.id, agent.name, agent.description, agent.type,
+      agent.telegramBotToken || null, agent.telegramChatId || null,
+      agent.status, agent.lastSeen,
+      agent.metadata ? JSON.stringify(agent.metadata) : null,
+      agent.createdAt, agent.updatedAt
     );
   }
 
-  getAgent(id: string): AgentDef | undefined {
+  getAgent(id: string): Agent | undefined {
     const row = this.db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as any;
     if (!row) return undefined;
     return this.rowToAgent(row);
   }
 
-  listAgents(): AgentDef[] {
+  listAgents(): Agent[] {
     const rows = this.db.prepare('SELECT * FROM agents ORDER BY name ASC').all() as any[];
     return rows.map(r => this.rowToAgent(r));
+  }
+
+  updateAgentStatus(id: string, status: AgentStatus): void {
+    this.db.prepare(
+      'UPDATE agents SET status = ?, last_seen = ?, updated_at = ? WHERE id = ?'
+    ).run(status, Date.now(), Date.now(), id);
   }
 
   deleteAgent(id: string): boolean {
@@ -114,16 +123,17 @@ export class ArcDatabase {
     return result.changes > 0;
   }
 
-  private rowToAgent(row: any): AgentDef {
+  private rowToAgent(row: any): Agent {
     return {
       id: row.id,
       name: row.name,
       description: row.description,
-      systemPrompt: row.system_prompt,
-      model: row.model || undefined,
-      maxTurns: row.max_turns,
-      allowedTools: row.allowed_tools ? JSON.parse(row.allowed_tools) : undefined,
-      workingDir: row.working_dir || undefined,
+      type: row.type,
+      telegramBotToken: row.telegram_bot_token || undefined,
+      telegramChatId: row.telegram_chat_id || undefined,
+      status: row.status,
+      lastSeen: row.last_seen,
+      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

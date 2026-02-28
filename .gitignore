@@ -6,3 +6,6 @@ data/arc.db-shm
 .arc-tmp/
 .env.local
 .env
+
+web/.next/
+web/node_modules/

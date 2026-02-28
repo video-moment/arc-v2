@@ -1,15 +1,26 @@
-// ── Agent Definition ──
-export interface AgentDef {
+// ── Agent (external agent registration) ──
+export type AgentType = 'telegram' | 'discord' | 'slack' | 'custom';
+export type AgentStatus = 'online' | 'offline' | 'error';
+
+export interface Agent {
   id: string;
   name: string;
   description: string;
-  systemPrompt: string;
-  model?: string;
-  maxTurns?: number;
-  allowedTools?: string[];
-  workingDir?: string;
+  type: AgentType;
+  telegramBotToken?: string;
+  telegramChatId?: string;
+  status: AgentStatus;
+  lastSeen: number;
+  metadata?: Record<string, unknown>;
   createdAt: number;
   updatedAt: number;
+}
+
+// ── Telegram ──
+export interface TelegramConfig {
+  botToken: string;
+  chatId?: string;
+  webhookUrl?: string;
 }
 
 // ── Chat ──
@@ -22,7 +33,7 @@ export interface ChatSession {
   updatedAt: number;
 }
 
-export type MessageRole = 'user' | 'assistant';
+export type MessageRole = 'user' | 'assistant' | string; // string allows agent names
 
 export interface ChatMessage {
   id: string;
@@ -37,6 +48,7 @@ export type WsEventType =
   | 'chat_message'
   | 'session_created'
   | 'session_updated'
+  | 'agent_status'
   | 'agent_typing'
   | 'agent_chunk'
   | 'agent_done'
@@ -70,15 +82,4 @@ export interface Task {
   result?: string;
   createdAt: number;
   updatedAt: number;
-}
-
-// ── Agent YAML ──
-export interface AgentYaml {
-  name: string;
-  description: string;
-  system_prompt: string;
-  model?: string;
-  max_turns?: number;
-  allowed_tools?: string[];
-  working_dir?: string;
 }

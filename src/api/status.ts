@@ -1,26 +1,27 @@
 import { Router } from 'express';
 import type { ArcDatabase } from '../db/database.js';
-import type { AgentRegistry } from '../engine/agent-registry.js';
-import type { ChatManager } from '../communication/chat-manager.js';
+import type { Monitor } from '../communication/monitor.js';
 
-export function createStatusRoutes(
-  db: ArcDatabase,
-  registry: AgentRegistry,
-  chatManager: ChatManager
-): Router {
+export function createStatusRoutes(db: ArcDatabase, monitor: Monitor): Router {
   const router = Router();
 
   router.get('/', (_req, res) => {
-    const agents = registry.list();
-    const sessions = chatManager.listSessions();
+    const agents = db.listAgents();
+    const sessions = monitor.listSessions();
 
     res.json({
       status: 'ok',
-      version: '0.1.0',
+      version: '0.2.0',
       timestamp: Date.now(),
-      agents: agents.length,
-      sessions: sessions.length,
-      activeSessions: sessions.filter(s => s.status === 'active').length,
+      agents: {
+        total: agents.length,
+        online: agents.filter(a => a.status === 'online').length,
+        offline: agents.filter(a => a.status === 'offline').length,
+      },
+      sessions: {
+        total: sessions.length,
+        active: sessions.filter(s => s.status === 'active').length,
+      },
     });
   });
 

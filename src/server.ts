@@ -2,18 +2,17 @@ import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import type { ArcDatabase } from './db/database.js';
-import type { AgentRegistry } from './engine/agent-registry.js';
-import type { ChatManager } from './communication/chat-manager.js';
+import type { Monitor } from './communication/monitor.js';
 import { createAgentRoutes } from './api/agents.js';
 import { createChatRoutes } from './api/chat.js';
 import { createStatusRoutes } from './api/status.js';
 import { createSquadRoutes } from './api/squads.js';
 import { createTaskRoutes } from './api/tasks.js';
+import { createTelegramRoutes } from './api/telegram.js';
 
 export function createApp(
   db: ArcDatabase,
-  registry: AgentRegistry,
-  chatManager: ChatManager
+  monitor: Monitor,
 ): express.Express {
   const app = express();
 
@@ -36,11 +35,12 @@ export function createApp(
   });
 
   // API routes
-  app.use('/api/agents', createAgentRoutes(registry));
-  app.use('/api/chat', createChatRoutes(chatManager, registry));
-  app.use('/api/status', createStatusRoutes(db, registry, chatManager));
-  app.use('/api/squads', createSquadRoutes(db, registry));
-  app.use('/api/tasks', createTaskRoutes(db, chatManager, registry));
+  app.use('/api/agents', createAgentRoutes(db));
+  app.use('/api/chat', createChatRoutes(monitor, db));
+  app.use('/api/status', createStatusRoutes(db, monitor));
+  app.use('/api/squads', createSquadRoutes(db));
+  app.use('/api/tasks', createTaskRoutes(db));
+  app.use('/api/telegram', createTelegramRoutes(db, monitor));
 
   // 404 handler
   app.use((_req: Request, res: Response) => {
