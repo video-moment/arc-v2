@@ -103,9 +103,11 @@ export async function POST(req: NextRequest) {
       (existing || []).map((m: any) => m.role + '::' + m.content + '::' + Math.floor(new Date(m.created_at).getTime() / 1000))
     );
 
-    // 새 메시지만 저장 (오래된 순서로)
+    // 새 메시지만 저장 (오래된 순서로, 6시간 이내만)
+    const sixHoursAgoSec = Math.floor((Date.now() - 6 * 60 * 60 * 1000) / 1000);
     let synced = 0;
     for (const msg of [...messages].reverse()) {
+      if (msg.date < sixHoursAgoSec) continue;
       const hasText = !!msg.message;
       const hasMedia = !!(msg.media);
       if (!hasText && !hasMedia) continue;
