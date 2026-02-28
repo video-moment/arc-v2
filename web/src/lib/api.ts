@@ -186,21 +186,13 @@ export async function sendMessage(sessionId: string, content: string, role = 'us
 // ── Telegram ──
 
 export async function sendTelegram(agentId: string, message: string): Promise<{ ok: boolean }> {
-  // 에이전트의 봇 토큰과 채팅 ID를 가져와서 직접 Telegram API 호출
-  const agent = await getAgent(agentId);
-  if (!agent.telegramBotToken || !agent.telegramChatId) {
-    throw new Error('텔레그램 설정이 없습니다');
-  }
-  const res = await fetch(
-    'https://api.telegram.org/bot' + agent.telegramBotToken + '/sendMessage',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: agent.telegramChatId, text: message }),
-    }
-  );
+  const res = await fetch('/api/telegram/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agentId, message }),
+  });
   if (!res.ok) throw new Error('텔레그램 전송 실패');
-  return { ok: true };
+  return res.json();
 }
 
 // ── Squads ──
