@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getAgent, getSessions, createSession, getMessages, sendMessage, sendTelegram, syncTelegram, updateAgent, getScheduleMessages, type Agent, type ChatMessage } from '@/lib/api';
+import { getAgent, getSessions, createSession, getMessages, sendTelegram, syncTelegram, updateAgent, getScheduleMessages, type Agent, type ChatMessage } from '@/lib/api';
 import ChatBubble from '@/components/ChatBubble';
 import StatusBadge from '@/components/StatusBadge';
 import TypingIndicator from '@/components/TypingIndicator';
@@ -217,9 +217,15 @@ export default function AgentChatPage() {
     setInput('');
     if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
     try {
-      const msg = await sendMessage(sessionId, text);
-      seenIds.current.add(msg.id);
-      setMessages(prev => [...prev, msg]);
+      // 낙관적 UI: 임시 메시지 표시 (DB 삽입 X — syncTelegram이 처리)
+      const tempId = '_temp_' + Date.now();
+      setMessages(prev => [...prev, {
+        id: tempId,
+        sessionId,
+        role: 'user',
+        content: text,
+        createdAt: new Date().toISOString(),
+      }]);
 
       await sendTelegram(id, text);
 
@@ -228,6 +234,8 @@ export default function AgentChatPage() {
       console.error('Send error:', err);
       setSendError(err?.message || '메시지 전송 실패');
       setInput(text);
+      // 실패 시 낙관적 메시지 제거
+      setMessages(prev => prev.filter(m => !m.id.startsWith('_temp_')));
     } finally {
       setSending(false);
     }
