@@ -126,3 +126,78 @@ CREATE TRIGGER squads_updated_at BEFORE UPDATE ON squads
 
 CREATE TRIGGER tasks_updated_at BEFORE UPDATE ON tasks
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ═══════════════════════════════════════
+-- 7. 뽀모도로 테이블
+-- ═══════════════════════════════════════
+
+CREATE TABLE pomo_projects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  color TEXT DEFAULT '#6366f1',
+  icon TEXT DEFAULT '📁',
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE pomo_subprojects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES pomo_projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT DEFAULT '#8b5cf6',
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE pomo_tasks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID REFERENCES pomo_projects(id) ON DELETE CASCADE,
+  subproject_id UUID REFERENCES pomo_subprojects(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  status TEXT DEFAULT 'pending',
+  priority TEXT DEFAULT 'medium',
+  category TEXT,
+  estimated_pomodoros INTEGER DEFAULT 1,
+  completed_pomodoros INTEGER DEFAULT 0,
+  due_date DATE,
+  sort_order INTEGER DEFAULT 0,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE pomo_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id UUID NOT NULL REFERENCES pomo_tasks(id) ON DELETE CASCADE,
+  duration_minutes INTEGER DEFAULT 25,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ,
+  is_completed BOOLEAN DEFAULT false
+);
+
+CREATE INDEX idx_pomo_subprojects_project ON pomo_subprojects(project_id);
+CREATE INDEX idx_pomo_tasks_project ON pomo_tasks(project_id);
+CREATE INDEX idx_pomo_tasks_subproject ON pomo_tasks(subproject_id);
+CREATE INDEX idx_pomo_tasks_status ON pomo_tasks(status);
+CREATE INDEX idx_pomo_sessions_task ON pomo_sessions(task_id);
+CREATE INDEX idx_pomo_sessions_started ON pomo_sessions(started_at);
+
+ALTER TABLE pomo_projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pomo_subprojects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pomo_tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pomo_sessions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all on pomo_projects" ON pomo_projects FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on pomo_subprojects" ON pomo_subprojects FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on pomo_tasks" ON pomo_tasks FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on pomo_sessions" ON pomo_sessions FOR ALL USING (true) WITH CHECK (true);
+
+CREATE TRIGGER pomo_projects_updated BEFORE UPDATE ON pomo_projects
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER pomo_subprojects_updated BEFORE UPDATE ON pomo_subprojects
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER pomo_tasks_updated BEFORE UPDATE ON pomo_tasks
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
