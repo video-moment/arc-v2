@@ -81,9 +81,7 @@ export default function AgentChatPage() {
         const msgs = await getMessages(sid);
         setMessages(msgs);
         msgs.forEach(m => seenIds.current.add(m.id));
-
-        // 페이지 로드 시 1회 동기화
-        syncTelegram(id).catch(() => {});
+        // 동기화는 폴링에서 처리 (중복 호출 방지)
       } catch (err) {
         console.error(err);
       } finally {

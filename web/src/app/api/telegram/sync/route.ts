@@ -93,21 +93,39 @@ export async function POST(req: NextRequest) {
       sessionId = newSession.id;
     }
 
-    // 기존 메시지 조회 (중복 방지: content + role 조합)
+    // 기존 메시지 조회 (중복 방지)
     const { data: existing } = await supabase
       .from('chat_messages')
       .select('content, role, created_at')
       .eq('session_id', sessionId);
 
-    const existingSet = new Set(
-      (existing || []).map((m: any) => m.role + '::' + m.content + '::' + Math.floor(new Date(m.created_at).getTime() / 1000))
-    );
+    // 중복 감지: 타임스탬프 포함 키 + 최근 메시지는 콘텐츠만으로도 체크
+    const existingSet = new Set<string>();
+    const recentContentSet = new Set<string>();
+    const fiveMinAgoMs = Date.now() - 5 * 60 * 1000;
+    for (const m of existing || []) {
+      const ts = Math.floor(new Date(m.created_at).getTime() / 1000);
+      const trimmed = (m.content || '').trim();
+      existingSet.add(m.role + '::' + trimmed + '::' + ts);
+      existingSet.add(m.role + '::' + trimmed + '::' + (ts - 1));
+      existingSet.add(m.role + '::' + trimmed + '::' + (ts + 1));
+      // 최근 5분 이내 메시지는 콘텐츠만으로도 중복 체크 (타임스탬프 차이 무관)
+      if (new Date(m.created_at).getTime() > fiveMinAgoMs) {
+        recentContentSet.add(m.role + '::' + trimmed);
+      }
+    }
+
+    // 텔레그램 msg.id로 같은 배치 내 중복 제거
+    const seenTgIds = new Set<number>();
 
     // 새 메시지만 저장 (오래된 순서로, 6시간 이내만)
     const sixHoursAgoSec = Math.floor((Date.now() - 6 * 60 * 60 * 1000) / 1000);
     let synced = 0;
     for (const msg of [...messages].reverse()) {
       if (msg.date < sixHoursAgoSec) continue;
+      if (seenTgIds.has(msg.id)) continue;
+      seenTgIds.add(msg.id);
+
       const hasText = !!msg.message;
       const hasMedia = !!(msg.media);
       if (!hasText && !hasMedia) continue;
@@ -117,9 +135,14 @@ export async function POST(req: NextRequest) {
       const role = isBot ? 'assistant' : 'user';
 
       const content = msg.message || '';
-      const key = role + '::' + content + '::' + msg.date;
+      const trimmedContent = content.trim();
+      const key = role + '::' + trimmedContent + '::' + msg.date;
+      const contentKey = role + '::' + trimmedContent;
       if (existingSet.has(key)) continue;
+      // 최근 5분 이내 같은 내용이면 타임스탬프 달라도 중복으로 처리
+      if (msg.date * 1000 > fiveMinAgoMs && recentContentSet.has(contentKey)) continue;
       existingSet.add(key);
+      recentContentSet.add(contentKey);
 
       // 미디어 처리
       let mediaUrl: string | null = null;
@@ -173,6 +196,14 @@ export async function POST(req: NextRequest) {
       });
 
       if (!error) synced++;
+    }
+
+    // 메시지가 동기화됐으면 에이전트 last_seen 갱신
+    if (synced > 0) {
+      await supabase
+        .from('agents')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', agentId);
     }
 
     // 6시간 지난 메시지 자동 삭제

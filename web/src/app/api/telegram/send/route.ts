@@ -79,6 +79,12 @@ export async function POST(req: NextRequest) {
       message,
     });
 
+    // 메시지 전송 시 에이전트 last_seen 갱신
+    await supabase
+      .from('agents')
+      .update({ last_seen: new Date().toISOString() })
+      .eq('id', agentId);
+
     return NextResponse.json({ ok: true, messageId: result.id });
   } catch (err: any) {
     console.error('[telegram/send]', err);
