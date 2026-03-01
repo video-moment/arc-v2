@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import StatusBadge from './StatusBadge';
-import type { Agent } from '@/lib/api';
+import ActivityBadge from './ActivityBadge';
+import type { Agent, ChatMessage } from '@/lib/api';
 
 function timeAgo(ts: string | number): string {
   const diff = Date.now() - new Date(ts).getTime();
@@ -20,8 +21,16 @@ const TYPE_META: Record<string, { icon: string; label: string; color: string }> 
   custom:   { icon: '⚡', label: '커스텀',  color: 'var(--accent)' },
 };
 
-export default function AgentCard({ agent }: { agent: Agent }) {
+interface Props {
+  agent: Agent;
+  lastMessage?: ChatMessage | null;
+}
+
+export default function AgentCard({ agent, lastMessage }: Props) {
   const meta = TYPE_META[agent.type] || TYPE_META.custom;
+  const lastActivity = lastMessage
+    ? Math.max(new Date(agent.lastSeen).getTime(), new Date(lastMessage.createdAt).getTime())
+    : agent.lastSeen;
 
   return (
     <Link
@@ -33,7 +42,7 @@ export default function AgentCard({ agent }: { agent: Agent }) {
         boxShadow: 'var(--shadow-card)',
       }}
     >
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"
@@ -50,14 +59,19 @@ export default function AgentCard({ agent }: { agent: Agent }) {
             </span>
           </div>
         </div>
-        <StatusBadge status={agent.status} />
+        <div className="flex flex-col items-end gap-1.5">
+          <StatusBadge status={agent.status} />
+          <ActivityBadge status={agent.status} lastMessage={lastMessage} />
+        </div>
       </div>
-      <p className="text-xs leading-relaxed mb-4 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
+
+      <p className="text-xs leading-relaxed mb-3 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
         {agent.description || '설명 없음'}
       </p>
+
       <div className="flex items-center justify-between">
         <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-          마지막 활동 {timeAgo(agent.lastSeen)}
+          마지막 활동 {timeAgo(lastActivity)}
         </span>
         <span
           className="text-[11px] px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"

@@ -1,0 +1,30 @@
+{
+  "name": "arc-monitor",
+  "version": "1.0.0",
+  "description": "ARC Monitor Desktop App",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.videomoment.arc-monitor",
+    "productName": "ARC Monitor",
+    "mac": {
+      "icon": "icon.icns",
+      "target": ["dmg"],
+      "category": "public.app-category.developer-tools"
+    },
+    "dmg": {
+      "title": "ARC Monitor",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    }
+  }
+}

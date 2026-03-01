@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getAgent, getSessions, createSession, getMessages, sendMessage, sendTelegram, syncTelegram, type Agent, type ChatMessage } from '@/lib/api';
-import { useRealtimeMessages } from '@/lib/ws';
+import { getAgent, getSessions, createSession, getMessages, sendMessage, sendTelegram, syncTelegram, updateAgent, getScheduleMessages, type Agent, type ChatMessage } from '@/lib/api';
 import ChatBubble from '@/components/ChatBubble';
 import StatusBadge from '@/components/StatusBadge';
 import TypingIndicator from '@/components/TypingIndicator';
@@ -44,6 +43,13 @@ export default function AgentChatPage() {
   const [waitingReply, setWaitingReply] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [schedules, setSchedules] = useState<ChatMessage[]>([]);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -119,46 +125,45 @@ export default function AgentChatPage() {
     return () => container.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleNewMessage = useCallback((msg: ChatMessage) => {
-    if (!seenIds.current.has(msg.id)) {
-      seenIds.current.add(msg.id);
-      setMessages(prev => [...prev, msg]);
-
-      // assistant 메시지 수신 시 타이핑 인디케이터 해제
-      if (msg.role === 'assistant') {
-        setWaitingReply(false);
-      }
-
-      // 탭 비활성 시 읽지 않은 메시지 카운트 + 브라우저 알림
-      if (document.visibilityState === 'hidden' && msg.role === 'assistant') {
-        setUnreadCount(prev => {
-          const next = prev + 1;
-          document.title = `(${next}) ${originalTitle.current}`;
-          return next;
-        });
-
-        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          const n = new Notification('새 메시지', {
-            body: msg.content.slice(0, 100) || '미디어 메시지',
-            icon: '/favicon.ico',
-          });
-          n.onclick = () => { window.focus(); n.close(); };
-        }
-      }
-    }
-  }, []);
-
-  useRealtimeMessages(sessionId, handleNewMessage);
-
   // 텔레그램 메시지 주기적 동기화 (탭 활성 시에만 3초마다)
   useEffect(() => {
-    if (!id) return;
+    if (!id || !sessionId) return;
     let interval: ReturnType<typeof setInterval> | null = null;
 
-    const doSync = () => {
+    const doSync = async () => {
       if (syncingRef.current) return;
       syncingRef.current = true;
-      syncTelegram(id).catch(() => {}).finally(() => { syncingRef.current = false; });
+      try {
+        await syncTelegram(id);
+        const freshMessages = await getMessages(sessionId);
+        let hasNewAssistant = false;
+        for (const msg of freshMessages) {
+          if (!seenIds.current.has(msg.id)) {
+            seenIds.current.add(msg.id);
+            if (msg.role === 'assistant') {
+              hasNewAssistant = true;
+              // 브라우저 알림
+              if (document.visibilityState === 'hidden') {
+                setUnreadCount(prev => {
+                  const next = prev + 1;
+                  document.title = `(${next}) ${originalTitle.current}`;
+                  return next;
+                });
+                if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                  const n = new Notification('새 메시지', {
+                    body: msg.content.slice(0, 100) || '미디어 메시지',
+                    icon: '/favicon.ico',
+                  });
+                  n.onclick = () => { window.focus(); n.close(); };
+                }
+              }
+            }
+          }
+        }
+        setMessages(freshMessages);
+        if (hasNewAssistant) setWaitingReply(false);
+      } catch {}
+      syncingRef.current = false;
     };
 
     const startPolling = () => {
@@ -183,7 +188,7 @@ export default function AgentChatPage() {
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [id]);
+  }, [id, sessionId]);
 
   useEffect(() => {
     if (!showScrollBtn) {
@@ -219,16 +224,6 @@ export default function AgentChatPage() {
       await sendTelegram(id, text);
 
       setWaitingReply(true);
-
-      setTimeout(async () => {
-        if (syncingRef.current) return;
-        syncingRef.current = true;
-        try {
-          await syncTelegram(id);
-        } finally {
-          syncingRef.current = false;
-        }
-      }, 3000);
     } catch (err: any) {
       console.error('Send error:', err);
       setSendError(err?.message || '메시지 전송 실패');
@@ -300,16 +295,144 @@ export default function AgentChatPage() {
         >
           ⚡
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-sm font-bold">{agent.name}</h1>
+            {editingName ? (
+              <input
+                autoFocus
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                onBlur={async () => {
+                  const trimmed = editName.trim();
+                  if (trimmed && trimmed !== agent.name) {
+                    const updated = await updateAgent(id, { name: trimmed });
+                    setAgent(updated);
+                  }
+                  setEditingName(false);
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                  if (e.key === 'Escape') { setEditName(agent.name); setEditingName(false); }
+                }}
+                className="text-sm font-bold outline-none rounded px-1 -ml-1"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--accent)', color: 'var(--text-primary)' }}
+              />
+            ) : (
+              <h1
+                className="text-sm font-bold cursor-pointer hover:text-[var(--accent)] transition-colors"
+                onClick={() => { setEditName(agent.name); setEditingName(true); }}
+                title="클릭하여 이름 수정"
+              >
+                {agent.name}
+              </h1>
+            )}
             <StatusBadge status={agent.status} />
           </div>
-          <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-            {agent.description || agent.type} · {agent.id}
-          </p>
+          {editingDesc ? (
+            <input
+              autoFocus
+              value={editDesc}
+              onChange={e => setEditDesc(e.target.value)}
+              onBlur={async () => {
+                const trimmed = editDesc.trim();
+                if (trimmed !== (agent.description || '')) {
+                  const updated = await updateAgent(id, { description: trimmed });
+                  setAgent(updated);
+                }
+                setEditingDesc(false);
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                if (e.key === 'Escape') { setEditDesc(agent.description || ''); setEditingDesc(false); }
+              }}
+              className="text-[11px] mt-0.5 outline-none rounded px-1 -ml-1 w-full"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--accent)', color: 'var(--text-tertiary)' }}
+              placeholder="설명을 입력하세요"
+            />
+          ) : (
+            <p
+              className="text-[11px] mt-0.5 cursor-pointer hover:text-[var(--text-secondary)] transition-colors truncate"
+              style={{ color: 'var(--text-tertiary)' }}
+              onClick={() => { setEditDesc(agent.description || ''); setEditingDesc(true); }}
+              title="클릭하여 설명 수정"
+            >
+              {agent.description || agent.type} · {agent.id}
+            </p>
+          )}
         </div>
+        <button
+          onClick={async () => {
+            if (!showSchedule && schedules.length === 0) {
+              setLoadingSchedule(true);
+              try {
+                const msgs = await getScheduleMessages(id);
+                setSchedules(msgs);
+              } catch (e) { console.error(e); }
+              setLoadingSchedule(false);
+            }
+            setShowSchedule(!showSchedule);
+          }}
+          className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+          style={{ background: showSchedule ? 'var(--accent-soft)' : 'var(--bg-hover)', color: showSchedule ? 'var(--accent)' : 'var(--text-secondary)' }}
+          title="자동화 스케줄"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+        </button>
       </div>
+
+      {/* Schedule Panel */}
+      {showSchedule && (
+        <div
+          className="mb-4 rounded-xl overflow-hidden animate-fade-in"
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
+        >
+          <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+            <h3 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>자동화 스케줄</h3>
+            <button
+              onClick={() => setShowSchedule(false)}
+              className="text-[11px] cursor-pointer"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
+              닫기
+            </button>
+          </div>
+          <div className="max-h-60 overflow-y-auto">
+            {loadingSchedule ? (
+              <div className="flex items-center gap-2 py-6 justify-center">
+                <div className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>불러오는 중...</span>
+              </div>
+            ) : schedules.length === 0 ? (
+              <div className="py-6 text-center">
+                <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>등록된 스케줄이 없습니다</p>
+              </div>
+            ) : (
+              <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                {schedules.map(msg => (
+                  <div key={msg.id} className="px-4 py-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{
+                        background: msg.role === 'assistant' ? 'var(--accent-soft)' : 'var(--bg-hover)',
+                        color: msg.role === 'assistant' ? 'var(--accent)' : 'var(--text-secondary)',
+                      }}>
+                        {msg.role === 'assistant' ? '에이전트' : '사용자'}
+                      </span>
+                      <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+                        {new Date(msg.createdAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-xs leading-relaxed line-clamp-3" style={{ color: 'var(--text-secondary)' }}>
+                      {msg.content.replace(/#+\s/g, '').replace(/\*+([^*]+)\*+/g, '$1').trim()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto pr-2 pb-4 relative">

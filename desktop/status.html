@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARC Monitor</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+:root {
+  --bg: #0a0a0c;
+  --bg-card: rgba(255,255,255,0.04);
+  --bg-card-border: rgba(255,255,255,0.08);
+  --bg-hover: rgba(255,255,255,0.07);
+  --text: #f0f0f0;
+  --text2: #9a9aaa;
+  --text3: #5a5a6a;
+  --accent: #8b5cf6;
+  --accent-soft: rgba(139,92,246,0.15);
+  --green: #34d399;
+  --green-soft: rgba(52,211,153,0.12);
+  --red: #f87171;
+  --red-soft: rgba(248,113,113,0.12);
+  --yellow: #fbbf24;
+  --yellow-soft: rgba(245,158,11,0.12);
+  --blue: #60a5fa;
+  --blue-soft: rgba(96,165,250,0.12);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard Variable', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+  -webkit-user-select: none; user-select: none;
+}
+
+.drag-bar {
+  -webkit-app-region: drag;
+  height: 28px;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+}
+
+.header {
+  padding: 10px 16px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 8px; }
+.header h1 { font-size: 14px; font-weight: 700; letter-spacing: -0.3px; }
+.conn-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 600; padding: 3px 8px;
+  border-radius: 99px; background: var(--green-soft); color: var(--green);
+}
+.conn-pill.offline { background: var(--red-soft); color: var(--red); }
+.conn-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.conn-pill:not(.offline) .conn-dot { animation: pulse 2s ease-in-out infinite; }
+
+.pin-btn {
+  -webkit-app-region: no-drag;
+  width: 28px; height: 28px; border: none; background: transparent;
+  color: var(--text3); cursor: pointer; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.pin-btn:hover { background: var(--bg-hover); color: var(--text2); }
+.pin-btn.active { color: var(--accent); }
+.pin-btn svg { width: 14px; height: 14px; }
+
+.content { padding: 4px 16px 4px; }
+
+/* 에이전트 그리드 */
+.agents-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.agent-block {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: 14px;
+  padding: 14px 12px;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; text-align: center;
+  transition: all 0.3s; position: relative; cursor: pointer;
+}
+.agent-block:hover { background: var(--bg-hover); }
+.agent-block.online { border-color: rgba(52,211,153,0.15); box-shadow: 0 0 12px rgba(52,211,153,0.06); }
+.agent-block.selected { border-color: rgba(139,92,246,0.3); background: var(--accent-soft); }
+.agent-block .agent-icon {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; background: rgba(255,255,255,0.05);
+  border: 1.5px solid rgba(255,255,255,0.08);
+}
+.agent-block.online .agent-icon { border-color: rgba(52,211,153,0.25); background: var(--green-soft); }
+.agent-block .agent-name { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.agent-block .agent-meta { font-size: 9px; color: var(--text3); line-height: 1.3; }
+.status-indicator { width: 8px; height: 8px; border-radius: 50%; position: absolute; top: 10px; right: 10px; }
+.status-indicator.online { background: var(--green); animation: pulse 2s ease-in-out infinite; }
+.status-indicator.offline { background: var(--text3); }
+.status-indicator.error { background: var(--red); }
+
+/* 활동 패널 */
+.activity-panel {
+  margin-top: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: 14px;
+  overflow: hidden;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+}
+.activity-header {
+  padding: 10px 14px 8px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.activity-agent-name { font-size: 12px; font-weight: 700; }
+.activity-close {
+  -webkit-app-region: no-drag;
+  width: 22px; height: 22px; border: none; background: transparent;
+  color: var(--text3); cursor: pointer; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+.activity-close:hover { background: var(--bg-hover); color: var(--text); }
+
+.activity-section {
+  padding: 10px 14px;
+}
+.activity-section + .activity-section {
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+.activity-label {
+  font-size: 9px; font-weight: 600; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.6px;
+  margin-bottom: 6px;
+}
+.activity-value {
+  font-size: 11px; line-height: 1.5; color: var(--text2);
+  display: -webkit-box; -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical; overflow: hidden;
+}
+.activity-value.current { color: var(--text); }
+
+/* 스케줄 태그 */
+.schedule-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600; padding: 3px 8px;
+  border-radius: 8px; margin-top: 4px;
+}
+.schedule-tag.active { background: var(--blue-soft); color: var(--blue); }
+.schedule-tag.pending { background: var(--yellow-soft); color: var(--yellow); }
+.schedule-tag.idle { background: rgba(255,255,255,0.05); color: var(--text3); }
+
+/* 메시지 미리보기 */
+.msg-preview {
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-top: 4px;
+}
+.msg-role {
+  font-size: 9px; font-weight: 600; color: var(--accent);
+  margin-bottom: 2px; text-transform: uppercase;
+}
+.msg-text {
+  font-size: 11px; color: var(--text2); line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden;
+  -webkit-user-select: text; user-select: text;
+}
+.msg-time { font-size: 9px; color: var(--text3); margin-top: 3px; }
+
+.section-label {
+  font-size: 10px; font-weight: 600; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin: 4px 0 6px; padding-left: 2px;
+}
+
+.footer {
+  padding: 8px 16px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  display: flex; justify-content: space-between; align-items: center;
+  background: var(--bg);
+}
+.footer-link {
+  font-size: 11px; color: var(--accent); cursor: pointer;
+  font-weight: 500; text-decoration: none; -webkit-app-region: no-drag;
+}
+.footer-link:hover { text-decoration: underline; }
+.footer-time { font-size: 10px; color: var(--text3); }
+
+.empty-state { text-align: center; padding: 40px 20px; color: var(--text3); }
+.empty-icon { font-size: 32px; margin-bottom: 8px; opacity: 0.5; }
+.empty-text { font-size: 12px; }
+
+.loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; gap: 12px; }
+.spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+.mini-spinner { width: 12px; height: 12px; border: 1.5px solid rgba(255,255,255,0.1); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; vertical-align: middle; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fadeIn 0.25s ease-out; }
+@keyframes slideDown { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 400px; } }
+.slide-down { animation: slideDown 0.2s ease-out; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 99px; }
+</style>
+</head>
+<body>
+<div class="drag-bar"></div>
+<div id="app">
+  <div class="loading">
+    <div class="spinner"></div>
+    <span style="font-size:12px;color:var(--text3)">연결 중...</span>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = 'https://axctajpohflpfadtyllf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_LA_kPXdsr3cKRvkr--L57Q_WEnHznHM';
+const DASHBOARD_URL = 'https://web-rho-tan-51.vercel.app';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const TYPE_META = {
+  telegram: { icon: '✈️' },
+  discord:  { icon: '🎮' },
+  slack:    { icon: '💬' },
+  custom:   { icon: '⚡' },
+};
+
+let agents = [];
+let sessions = {};      // agentId → session
+let lastMessages = {};   // agentId → { role, content, created_at }
+let connected = false;
+let pinned = false;
+let selectedAgent = null;
+let loadingActivity = false;
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return '방금 전';
+  if (mins < 60) return mins + '분 전';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + '시간 전';
+  return Math.floor(hrs / 24) + '일 전';
+}
+
+function stripMarkdown(text) {
+  if (!text) return '';
+  return text
+    .replace(/#{1,3}\s/g, '')
+    .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[|─┃━]/g, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
+// 마지막 활동 시간: lastSeen과 lastMessage 중 더 최근 값
+function getLastActivity(agent) {
+  const msg = lastMessages[agent.id];
+  if (!msg) return agent.last_seen;
+  const seenTime = new Date(agent.last_seen).getTime();
+  const msgTime = new Date(msg.created_at).getTime();
+  return Math.max(seenTime, msgTime);
+}
+
+// 에이전트 활동 상태 추론
+function getAgentActivity(agent) {
+  const msg = lastMessages[agent.id];
+  const session = sessions[agent.id];
+
+  if (agent.status !== 'online') {
+    return { status: 'idle', label: '비활성', desc: '오프라인 상태' };
+  }
+
+  if (!msg) {
+    return { status: 'idle', label: '대기 중', desc: '활동 내역 없음' };
+  }
+
+  // 스케줄 태그가 포함된 메시지 감지
+  const content = msg.content || '';
+  if (content.includes('[스케줄]') || content.includes('📋')) {
+    const scheduleMatch = content.match(/\[스케줄\]\s*(.+)/);
+    return { status: 'pending', label: '스케줄 진행', desc: scheduleMatch ? scheduleMatch[1].slice(0, 60) : '스케줄 작업 중' };
+  }
+
+  const lastAct = getLastActivity(agent);
+  const diff = Date.now() - new Date(lastAct).getTime();
+  if (diff < 5 * 60 * 1000) {
+    return { status: 'active', label: '활동 중', desc: stripMarkdown(content).slice(0, 60) };
+  }
+
+  return { status: 'idle', label: '대기 중', desc: timeAgo(lastAct) + ' 마지막 활동' };
+}
+
+const PIN_FILL = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 2l-4 4-2-1-5 5 3 3-5 5h3l3-3 3 3 5-5-1-2 4-4-4-5z"/></svg>`;
+const PIN_SLASH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 17v5M9 11l-6 6h5l1-1M15 4.5L14 8l3 3 1.5-1M2 2l20 20"/><path d="M9.5 9.5L5 14h4l1 1 1-1 3 3 5-5-1-2 4-4-5-1z" opacity="0.3"/></svg>`;
+
+function togglePin() {
+  pinned = !pinned;
+  if (window.electronAPI?.setPin) window.electronAPI.setPin(pinned);
+  render();
+}
+
+async function selectAgent(agentId) {
+  if (selectedAgent === agentId) { selectedAgent = null; render(); return; }
+  selectedAgent = agentId;
+  loadingActivity = true;
+  render();
+
+  // 세션 + 최근 메시지 로드
+  try {
+    const { data: sessionData } = await sb
+      .from('chat_sessions')
+      .select('*')
+      .eq('agent_id', agentId)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    if (sessionData && sessionData[0]) {
+      sessions[agentId] = sessionData[0];
+      const { data: msgData } = await sb
+        .from('chat_messages')
+        .select('*')
+        .eq('session_id', sessionData[0].id)
+        .order('created_at', { ascending: false })
+        .limit(3);
+      if (msgData && msgData.length > 0) {
+        lastMessages[agentId] = msgData[0];
+        // 최근 3개 저장
+        sessions[agentId]._recentMessages = msgData.reverse();
+      }
+    }
+  } catch (e) {
+    console.error('activity load error:', e);
+  }
+
+  loadingActivity = false;
+  render();
+}
+
+function render() {
+  const online = agents.filter(a => a.status === 'online');
+
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="drag-bar"></div>
+
+    <div class="header">
+      <div class="header-left">
+        <h1>ARC Monitor</h1>
+        <div class="conn-pill ${connected ? '' : 'offline'}">
+          <span class="conn-dot"></span>
+          ${connected ? '연결됨' : '끊김'}
+        </div>
+      </div>
+      <button class="pin-btn ${pinned ? 'active' : ''}" onclick="togglePin()" title="${pinned ? '고정 해제' : '화면 고정'}">
+        ${pinned ? PIN_FILL : PIN_SLASH}
+      </button>
+    </div>
+
+    <div class="content">
+      ${agents.length > 0 ? `
+        <div class="section-label">에이전트 (${online.length}/${agents.length})</div>
+        <div class="agents-grid">
+          ${agents.map(a => agentBlock(a)).join('')}
+        </div>
+        ${selectedAgent ? activityPanel(selectedAgent) : ''}
+      ` : `
+        <div class="empty-state fade-in">
+          <div class="empty-icon">📡</div>
+          <div class="empty-text">등록된 에이전트가 없습니다</div>
+        </div>
+      `}
+    </div>
+
+    <div class="footer">
+      <a class="footer-link" onclick="openDashboard()">대시보드 열기 ↗</a>
+      <span class="footer-time">${new Date().toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit' })}</span>
+    </div>
+  `;
+
+  requestAnimationFrame(() => {
+    const h = document.body.scrollHeight;
+    if (window.electronAPI?.resizeHeight) window.electronAPI.resizeHeight(h);
+  });
+}
+
+function agentBlock(agent) {
+  const meta = TYPE_META[agent.type] || TYPE_META.custom;
+  const isOnline = agent.status === 'online';
+  const isSelected = selectedAgent === agent.id;
+  const activity = getAgentActivity(agent);
+
+  return `
+    <div class="agent-block ${isOnline ? 'online' : ''} ${isSelected ? 'selected' : ''} fade-in" onclick="selectAgent('${agent.id}')">
+      <div class="agent-icon">${meta.icon}</div>
+      <div class="agent-name">${agent.name}</div>
+      <div class="agent-meta">
+        <span class="schedule-tag ${activity.status}">${activity.label}</span>
+      </div>
+      <div class="status-indicator ${agent.status}"></div>
+    </div>
+  `;
+}
+
+function activityPanel(agentId) {
+  const agent = agents.find(a => a.id === agentId);
+  if (!agent) return '';
+
+  if (loadingActivity) {
+    return `
+      <div class="activity-panel slide-down">
+        <div style="padding:20px;text-align:center">
+          <span class="mini-spinner"></span>
+          <span style="font-size:11px;color:var(--text3);margin-left:8px">불러오는 중...</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const activity = getAgentActivity(agent);
+  const session = sessions[agentId];
+  const recentMsgs = session?._recentMessages || [];
+
+  return `
+    <div class="activity-panel slide-down">
+      <div class="activity-header">
+        <span class="activity-agent-name">${agent.name}</span>
+        <button class="activity-close" onclick="selectedAgent=null;render()">✕</button>
+      </div>
+
+      <div class="activity-section">
+        <div class="activity-label">현재 상태</div>
+        <div>
+          <span class="schedule-tag ${activity.status}">${activity.label}</span>
+        </div>
+        <div class="activity-value current" style="margin-top:6px">${activity.desc}</div>
+      </div>
+
+      ${session ? `
+        <div class="activity-section">
+          <div class="activity-label">세션: ${session.title || '기본'}</div>
+          ${recentMsgs.length > 0 ? recentMsgs.map(m => `
+            <div class="msg-preview">
+              <div class="msg-role">${m.role === 'assistant' ? '🤖 에이전트' : '👤 사용자'}</div>
+              <div class="msg-text">${stripMarkdown(m.content)}</div>
+              <div class="msg-time">${timeAgo(m.created_at)}</div>
+            </div>
+          `).join('') : `
+            <div class="activity-value">메시지 없음</div>
+          `}
+        </div>
+      ` : `
+        <div class="activity-section">
+          <div class="activity-label">활동 내역</div>
+          <div class="activity-value">세션 없음</div>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function openDashboard() {
+  if (window.electronAPI?.openExternal) window.electronAPI.openExternal(DASHBOARD_URL);
+  else window.open(DASHBOARD_URL, '_blank');
+}
+
+async function fetchData() {
+  try {
+    const { data, error } = await sb.from('agents').select('*').order('name');
+    if (error) throw error;
+    agents = data || [];
+
+    // 각 에이전트의 최근 세션+메시지 프리로드
+    for (const agent of agents) {
+      try {
+        const { data: sd } = await sb.from('chat_sessions').select('*').eq('agent_id', agent.id).order('updated_at', { ascending: false }).limit(1);
+        if (sd && sd[0]) {
+          sessions[agent.id] = sd[0];
+          const { data: md } = await sb.from('chat_messages').select('*').eq('session_id', sd[0].id).order('created_at', { ascending: false }).limit(1);
+          if (md && md[0]) lastMessages[agent.id] = md[0];
+        }
+      } catch {}
+    }
+
+    connected = true;
+  } catch (e) {
+    connected = false;
+    console.error('fetchData error:', e);
+  }
+  render();
+}
+
+function subscribe() {
+  sb.channel('monitor-agents')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'agents' }, async (payload) => {
+      if (payload.eventType === 'INSERT') {
+        const agent = payload.new;
+        if (!agents.some(a => a.id === agent.id)) {
+          agents.push(agent);
+          // 신규 에이전트 세션/메시지 프리로드
+          try {
+            const { data: sd } = await sb.from('chat_sessions').select('*').eq('agent_id', agent.id).order('updated_at', { ascending: false }).limit(1);
+            if (sd && sd[0]) {
+              sessions[agent.id] = sd[0];
+              const { data: md } = await sb.from('chat_messages').select('*').eq('session_id', sd[0].id).order('created_at', { ascending: false }).limit(1);
+              if (md && md[0]) lastMessages[agent.id] = md[0];
+            }
+          } catch {}
+        }
+      } else if (payload.eventType === 'UPDATE') {
+        const idx = agents.findIndex(a => a.id === payload.new.id);
+        if (idx >= 0) agents[idx] = payload.new;
+      } else if (payload.eventType === 'DELETE') {
+        agents = agents.filter(a => a.id !== payload.old.id);
+      }
+      render();
+    })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
+      const msg = payload.new;
+      // 세션 → 에이전트 매핑
+      for (const [agentId, session] of Object.entries(sessions)) {
+        if (session && session.id === msg.session_id) {
+          lastMessages[agentId] = msg;
+          if (session._recentMessages) {
+            session._recentMessages.push(msg);
+            if (session._recentMessages.length > 3) session._recentMessages.shift();
+          }
+          render();
+          break;
+        }
+      }
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') { connected = true; render(); }
+    });
+}
+
+if (window.electronAPI?.onPinState) {
+  window.electronAPI.onPinState((value) => { pinned = value; render(); });
+}
+
+setInterval(fetchData, 30000);
+fetchData().then(subscribe);
+</script>
+</body>
+</html>

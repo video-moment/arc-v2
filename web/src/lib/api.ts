@@ -45,18 +45,6 @@ export interface Squad {
   updatedAt: string;
 }
 
-export interface Task {
-  id: string;
-  squadId: string;
-  title: string;
-  description: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
-  assignedAgentId?: string;
-  result?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 // ── Helpers: snake_case ↔ camelCase ──
 
 function toAgent(row: any): Agent {
@@ -110,20 +98,6 @@ function toSquad(row: any): Squad {
   };
 }
 
-function toTask(row: any): Task {
-  return {
-    id: row.id,
-    squadId: row.squad_id,
-    title: row.title,
-    description: row.description,
-    status: row.status,
-    assignedAgentId: row.assigned_agent_id,
-    result: row.result,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
 // ── Agents ──
 
 export async function getAgents(): Promise<Agent[]> {
@@ -140,6 +114,21 @@ export async function getAgent(id: string): Promise<Agent> {
     .from('agents')
     .select('*')
     .eq('id', id)
+    .single();
+  if (error) throw error;
+  return toAgent(data);
+}
+
+export async function updateAgent(id: string, updates: { name?: string; description?: string }): Promise<Agent> {
+  const dbUpdates: Record<string, string> = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.description !== undefined) dbUpdates.description = updates.description;
+
+  const { data, error } = await supabase
+    .from('agents')
+    .update(dbUpdates)
+    .eq('id', id)
+    .select()
     .single();
   if (error) throw error;
   return toAgent(data);
@@ -260,51 +249,24 @@ export async function deleteSquad(id: string): Promise<{ deleted: boolean }> {
   return { deleted: true };
 }
 
-// ── Tasks ──
+// ── Schedule Messages ──
 
-export async function getTasks(squadId?: string, status?: string): Promise<Task[]> {
-  let query = supabase.from('tasks').select('*').order('created_at', { ascending: false });
-  if (squadId) query = query.eq('squad_id', squadId);
-  if (status) query = query.eq('status', status);
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data || []).map(toTask);
-}
+export async function getScheduleMessages(agentId: string): Promise<ChatMessage[]> {
+  // 에이전트의 모든 세션에서 스케줄 관련 메시지 검색
+  const { data: sessionData } = await supabase
+    .from('chat_sessions')
+    .select('id')
+    .eq('agent_id', agentId);
+  if (!sessionData || sessionData.length === 0) return [];
 
-export async function createTask(input: { squadId: string; title: string; description?: string }): Promise<Task> {
+  const sessionIds = sessionData.map(s => s.id);
   const { data, error } = await supabase
-    .from('tasks')
-    .insert({
-      squad_id: input.squadId,
-      title: input.title,
-      description: input.description || '',
-    })
-    .select()
-    .single();
+    .from('chat_messages')
+    .select('*')
+    .in('session_id', sessionIds)
+    .or('content.ilike.%[스케줄]%,content.ilike.%📋%,content.ilike.%자동화%,content.ilike.%매일%,content.ilike.%매주%,content.ilike.%반복%')
+    .order('created_at', { ascending: false })
+    .limit(20);
   if (error) throw error;
-  return toTask(data);
-}
-
-export async function updateTask(id: string, updates: Partial<Task>): Promise<Task> {
-  const dbUpdates: any = {};
-  if (updates.status) dbUpdates.status = updates.status;
-  if (updates.title) dbUpdates.title = updates.title;
-  if (updates.description !== undefined) dbUpdates.description = updates.description;
-  if (updates.assignedAgentId !== undefined) dbUpdates.assigned_agent_id = updates.assignedAgentId;
-  if (updates.result !== undefined) dbUpdates.result = updates.result;
-
-  const { data, error } = await supabase
-    .from('tasks')
-    .update(dbUpdates)
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return toTask(data);
-}
-
-export async function deleteTask(id: string): Promise<{ deleted: boolean }> {
-  const { error } = await supabase.from('tasks').delete().eq('id', id);
-  if (error) throw error;
-  return { deleted: true };
+  return (data || []).map(toMessage);
 }

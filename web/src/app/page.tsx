@@ -3,35 +3,113 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
-import { getAgents, type Agent } from '@/lib/api';
+import { getAgents, getSessions, type Agent, type ChatMessage } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import AgentCard from '@/components/AgentCard';
 
 export default function HomePage() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [lastMessages, setLastMessages] = useState<Record<string, ChatMessage>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getAgents()
-      .then(setAgents)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const agentList = await getAgents();
+        setAgents(agentList);
+
+        // 각 에이전트의 최근 세션 → 최근 메시지 1개 로드
+        const msgMap: Record<string, ChatMessage> = {};
+        await Promise.all(
+          agentList.map(async (agent) => {
+            try {
+              const sessions = await getSessions(agent.id);
+              if (sessions.length > 0) {
+                const { data } = await supabase
+                  .from('chat_messages')
+                  .select('*')
+                  .eq('session_id', sessions[0].id)
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+                if (data && data[0]) {
+                  msgMap[agent.id] = {
+                    id: data[0].id,
+                    sessionId: data[0].session_id,
+                    role: data[0].role,
+                    content: data[0].content,
+                    mediaUrl: data[0].media_url,
+                    mediaType: data[0].media_type,
+                    createdAt: data[0].created_at,
+                  };
+                }
+              }
+            } catch {}
+          })
+        );
+        setLastMessages(msgMap);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    })();
 
     // 에이전트 상태 실시간 구독
     const channel = supabase
       .channel('agents-status')
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'agents' },
+        { event: '*', schema: 'public', table: 'agents' },
         (payload) => {
-          const updated = payload.new;
-          setAgents(prev =>
-            prev.map(a =>
-              a.id === updated.id
-                ? { ...a, status: updated.status, lastSeen: updated.last_seen }
-                : a
-            )
-          );
+          if (payload.eventType === 'INSERT') {
+            const n = payload.new;
+            setAgents(prev => {
+              if (prev.some(a => a.id === n.id)) return prev;
+              return [...prev, {
+                id: n.id, name: n.name, description: n.description, type: n.type,
+                status: n.status, lastSeen: n.last_seen,
+                telegramBotToken: n.telegram_bot_token, telegramChatId: n.telegram_chat_id,
+                metadata: n.metadata, createdAt: n.created_at, updatedAt: n.updated_at,
+              }];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = payload.new;
+            setAgents(prev =>
+              prev.map(a =>
+                a.id === updated.id
+                  ? { ...a, name: updated.name, description: updated.description, status: updated.status, lastSeen: updated.last_seen }
+                  : a
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setAgents(prev => prev.filter(a => a.id !== payload.old.id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        (payload) => {
+          const msg = payload.new;
+          // session_id → agent_id 매핑 (이미 로드된 세션 기반)
+          setLastMessages(prev => {
+            const updated = { ...prev };
+            for (const [agentId, existing] of Object.entries(prev)) {
+              if (existing.sessionId === msg.session_id) {
+                updated[agentId] = {
+                  id: msg.id,
+                  sessionId: msg.session_id,
+                  role: msg.role,
+                  content: msg.content,
+                  mediaUrl: msg.media_url,
+                  mediaType: msg.media_type,
+                  createdAt: msg.created_at,
+                };
+                break;
+              }
+            }
+            return updated;
+          });
         }
       )
       .subscribe();
@@ -81,7 +159,7 @@ export default function HomePage() {
                 </h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {online.map(a => <AgentCard key={a.id} agent={a} />)}
+                {online.map(a => <AgentCard key={a.id} agent={a} lastMessage={lastMessages[a.id]} />)}
               </div>
             </section>
           )}
@@ -91,7 +169,7 @@ export default function HomePage() {
                 오프라인 ({offline.length})
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {offline.map(a => <AgentCard key={a.id} agent={a} />)}
+                {offline.map(a => <AgentCard key={a.id} agent={a} lastMessage={lastMessages[a.id]} />)}
               </div>
             </section>
           )}
