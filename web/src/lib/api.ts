@@ -544,6 +544,130 @@ export async function deleteSquad(id: string): Promise<{ deleted: boolean }> {
   return { deleted: true };
 }
 
+// ── Notes ──
+
+export interface NoteGroup {
+  id: string;
+  name: string;
+  emoji: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotePage {
+  id: string;
+  groupId: string;
+  title: string;
+  emoji: string;
+  content: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function toNoteGroup(row: any): NoteGroup {
+  return {
+    id: row.id,
+    name: row.name,
+    emoji: row.emoji || '📁',
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toNotePage(row: any): NotePage {
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    title: row.title,
+    emoji: row.emoji || '📝',
+    content: row.content || '',
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function getNoteGroups(): Promise<NoteGroup[]> {
+  const { data, error } = await supabase
+    .from('note_groups')
+    .select('*')
+    .order('sort_order');
+  if (error) throw error;
+  return (data || []).map(toNoteGroup);
+}
+
+export async function createNoteGroup(name: string, emoji = '📁'): Promise<NoteGroup> {
+  const { data, error } = await supabase
+    .from('note_groups')
+    .insert({ name, emoji })
+    .select()
+    .single();
+  if (error) throw error;
+  return toNoteGroup(data);
+}
+
+export async function updateNoteGroup(id: string, updates: Partial<Pick<NoteGroup, 'name' | 'emoji' | 'sortOrder'>>): Promise<NoteGroup> {
+  const dbUpdates: Record<string, any> = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.emoji !== undefined) dbUpdates.emoji = updates.emoji;
+  if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+  const { data, error } = await supabase
+    .from('note_groups')
+    .update(dbUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toNoteGroup(data);
+}
+
+export async function deleteNoteGroup(id: string): Promise<void> {
+  const { error } = await supabase.from('note_groups').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function getNotePages(groupId?: string): Promise<NotePage[]> {
+  let query = supabase.from('note_pages').select('*').order('sort_order');
+  if (groupId) query = query.eq('group_id', groupId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(toNotePage);
+}
+
+export async function createNotePage(groupId: string, title: string, emoji = '📝'): Promise<NotePage> {
+  const { data, error } = await supabase
+    .from('note_pages')
+    .insert({ group_id: groupId, title, emoji })
+    .select()
+    .single();
+  if (error) throw error;
+  return toNotePage(data);
+}
+
+export async function updateNotePage(id: string, updates: Partial<Pick<NotePage, 'title' | 'emoji' | 'content' | 'sortOrder'>>): Promise<NotePage> {
+  const dbUpdates: Record<string, any> = {};
+  if (updates.title !== undefined) dbUpdates.title = updates.title;
+  if (updates.emoji !== undefined) dbUpdates.emoji = updates.emoji;
+  if (updates.content !== undefined) dbUpdates.content = updates.content;
+  if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+  const { data, error } = await supabase
+    .from('note_pages')
+    .update(dbUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toNotePage(data);
+}
+
+export async function deleteNotePage(id: string): Promise<void> {
+  const { error } = await supabase.from('note_pages').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── Schedule Messages ──
 
 export async function getScheduleMessages(agentId: string): Promise<ChatMessage[]> {

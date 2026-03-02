@@ -9,6 +9,7 @@ import { createStatusRoutes } from './api/status.js';
 import { createSquadRoutes } from './api/squads.js';
 import { createTaskRoutes } from './api/tasks.js';
 import { createTelegramRoutes } from './api/telegram.js';
+import { createNoteRoutes } from './api/notes.js';
 
 export function createApp(
   db: ArcDatabase,
@@ -41,6 +42,7 @@ export function createApp(
   app.use('/api/squads', createSquadRoutes(db));
   app.use('/api/tasks', createTaskRoutes(db));
   app.use('/api/telegram', createTelegramRoutes(db, monitor));
+  app.use('/api/notes', createNoteRoutes());
 
   // 404 handler
   app.use((_req: Request, res: Response) => {

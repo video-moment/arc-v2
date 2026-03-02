@@ -78,6 +78,77 @@ export const TOOL_DEFINITIONS = [
       },
     },
   },
+
+  // ── Notes ──────────────────────────────────────────
+  {
+    name: 'arc_list_note_groups',
+    description: 'List all note groups (folders). Returns id, name, emoji.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+    },
+  },
+  {
+    name: 'arc_create_note_group',
+    description: 'Create a new note group (folder).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        name: { type: 'string', description: 'Group name' },
+        emoji: { type: 'string', description: 'Emoji icon (default: 📁)' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'arc_list_note_pages',
+    description: 'List note pages, optionally filtered by group ID.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        groupId: { type: 'string', description: 'Filter by group ID (optional)' },
+      },
+    },
+  },
+  {
+    name: 'arc_read_note_page',
+    description: 'Read a single note page with full content.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'Page ID' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'arc_create_note_page',
+    description: 'Create a new note page in a group. Content supports markdown.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        groupId: { type: 'string', description: 'Group ID to create page in' },
+        title: { type: 'string', description: 'Page title' },
+        emoji: { type: 'string', description: 'Emoji icon (default: 📝)' },
+        content: { type: 'string', description: 'Page content (markdown)' },
+      },
+      required: ['groupId', 'title'],
+    },
+  },
+  {
+    name: 'arc_update_note_page',
+    description: 'Update a note page (title, content, emoji). Content supports markdown.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        id: { type: 'string', description: 'Page ID' },
+        title: { type: 'string', description: 'New title' },
+        emoji: { type: 'string', description: 'New emoji' },
+        content: { type: 'string', description: 'New content (markdown)' },
+      },
+      required: ['id'],
+    },
+  },
 ];
 
 export async function handleToolCall(
@@ -204,6 +275,98 @@ export async function handleToolCall(
       const { data, error } = await query;
       if (error) return text({ error: error.message });
       return text({ sessions: data, count: data.length });
+    }
+
+    // ── Notes ──────────────────────────────────────────
+
+    case 'arc_list_note_groups': {
+      const { data, error } = await supabase
+        .from('note_groups')
+        .select('*')
+        .order('sort_order');
+
+      if (error) return text({ error: error.message });
+      return text({ groups: data, count: data.length });
+    }
+
+    case 'arc_create_note_group': {
+      const { name: groupName, emoji } = args as { name: string; emoji?: string };
+      const { data, error } = await supabase
+        .from('note_groups')
+        .insert({ name: groupName, emoji: emoji || '📁' })
+        .select()
+        .single();
+
+      if (error) return text({ error: error.message });
+      return text({ group: data, created: true });
+    }
+
+    case 'arc_list_note_pages': {
+      const { groupId } = args as { groupId?: string };
+      let query = supabase
+        .from('note_pages')
+        .select('id, group_id, title, emoji, sort_order, created_at, updated_at')
+        .order('sort_order');
+      if (groupId) query = query.eq('group_id', groupId);
+
+      const { data, error } = await query;
+      if (error) return text({ error: error.message });
+      return text({ pages: data, count: data.length });
+    }
+
+    case 'arc_read_note_page': {
+      const { id } = args as { id: string };
+      const { data, error } = await supabase
+        .from('note_pages')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) return text({ error: error.message });
+      return text({ page: data });
+    }
+
+    case 'arc_create_note_page': {
+      const { groupId, title, emoji, content } = args as {
+        groupId: string; title: string; emoji?: string; content?: string;
+      };
+      const { data, error } = await supabase
+        .from('note_pages')
+        .insert({
+          group_id: groupId,
+          title,
+          emoji: emoji || '📝',
+          content: content || '',
+        })
+        .select()
+        .single();
+
+      if (error) return text({ error: error.message });
+      return text({ page: data, created: true });
+    }
+
+    case 'arc_update_note_page': {
+      const { id, title, emoji, content } = args as {
+        id: string; title?: string; emoji?: string; content?: string;
+      };
+      const updates: Record<string, string> = {};
+      if (title !== undefined) updates.title = title;
+      if (emoji !== undefined) updates.emoji = emoji;
+      if (content !== undefined) updates.content = content;
+
+      if (Object.keys(updates).length === 0) {
+        return text({ error: 'No fields to update' });
+      }
+
+      const { data, error } = await supabase
+        .from('note_pages')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) return text({ error: error.message });
+      return text({ page: data, updated: true });
     }
 
     default:
