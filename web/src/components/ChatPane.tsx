@@ -23,6 +23,7 @@ export default function ChatPane({ agentId, agents, onChangeAgent }: ChatPanePro
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const seenIds = useRef(new Set<string>());
   const syncingRef = useRef(false);
+  const msgCountRef = useRef(0);
 
   const agent = agents.find(a => a.id === agentId);
 
@@ -46,6 +47,7 @@ export default function ChatPane({ agentId, agents, onChangeAgent }: ChatPanePro
         setSessionId(sid);
         const msgs = await getMessages(sid);
         setMessages(msgs);
+        msgCountRef.current = msgs.length;
         msgs.forEach(m => seenIds.current.add(m.id));
       } catch (err) {
         console.error(err);
@@ -66,15 +68,18 @@ export default function ChatPane({ agentId, agents, onChangeAgent }: ChatPanePro
       try {
         await syncTelegram(agentId);
         const freshMessages = await getMessages(sessionId);
-        let hasNewAssistant = false;
+        let hasNew = false;
         for (const msg of freshMessages) {
           if (!seenIds.current.has(msg.id)) {
             seenIds.current.add(msg.id);
-            if (msg.role === 'assistant') hasNewAssistant = true;
+            hasNew = true;
+            if (msg.role === 'assistant') setWaitingReply(false);
           }
         }
-        setMessages(freshMessages);
-        if (hasNewAssistant) setWaitingReply(false);
+        if (hasNew || freshMessages.length !== msgCountRef.current) {
+          msgCountRef.current = freshMessages.length;
+          setMessages(freshMessages);
+        }
       } catch {}
       syncingRef.current = false;
     };
@@ -103,10 +108,20 @@ export default function ChatPane({ agentId, agents, onChangeAgent }: ChatPanePro
     };
   }, [agentId, sessionId]);
 
-  // 자동 스크롤
+  // 자동 스크롤 — 새 메시지 추가 시에만
+  const prevLenRef = useRef(0);
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, waitingReply]);
+    if (messages.length !== prevLenRef.current) {
+      prevLenRef.current = messages.length;
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    if (waitingReply) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [waitingReply]);
 
   const handleSend = async () => {
     const text = input.trim();
