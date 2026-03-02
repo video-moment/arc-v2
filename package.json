@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "mcp": "tsx src/mcp/server.ts",
     "build": "tsc",
-    "test": "vitest"
+    "test": "vitest",
+    "bridge:dohwa": "tsx scripts/dohwa-bridge.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

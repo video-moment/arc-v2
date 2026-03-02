@@ -1,0 +1,17 @@
+{
+  "apps": [
+    {
+      "name": "dohwa-bridge",
+      "script": "npx",
+      "args": "tsx scripts/dohwa-bridge.ts",
+      "cwd": "/Users/vimo/arc-v2",
+      "autorestart": true,
+      "max_restarts": 10,
+      "restart_delay": 5000,
+      "watch": false,
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  ]
+}

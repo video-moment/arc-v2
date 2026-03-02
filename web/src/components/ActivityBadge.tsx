@@ -15,17 +15,14 @@ const ACTIVITY: Record<string, { bg: string; color: string; label: string }> = {
 export function getActivity(agentStatus: string, lastMessage?: ChatMessage | null) {
   if (agentStatus !== 'online') return ACTIVITY.offline;
 
-  if (!lastMessage) return ACTIVITY.idle;
-
-  const content = lastMessage.content || '';
-  if (content.includes('[스케줄]') || content.includes('📋')) {
-    return ACTIVITY.schedule;
+  if (lastMessage) {
+    const content = lastMessage.content || '';
+    if (content.includes('[스케줄]') || content.includes('📋')) {
+      return ACTIVITY.schedule;
+    }
   }
 
-  const diff = Date.now() - new Date(lastMessage.createdAt).getTime();
-  if (diff < 5 * 60 * 1000) return ACTIVITY.active;
-
-  return ACTIVITY.idle;
+  return ACTIVITY.active;
 }
 
 export default function ActivityBadge({ status, lastMessage }: Props) {

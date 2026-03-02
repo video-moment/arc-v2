@@ -72,8 +72,8 @@ body {
 
 .content { padding: 4px 16px 4px; }
 
-/* 에이전트 그리드 */
-.agents-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+/* 에이전트 그리드 — 항상 한 줄 */
+.agents-grid { display: flex; gap: 8px; }
 .agent-block {
   background: var(--bg-card);
   border: 1px solid var(--bg-card-border);
@@ -83,6 +83,7 @@ body {
   display: flex; flex-direction: column; align-items: center;
   gap: 8px; text-align: center;
   transition: all 0.3s; position: relative; cursor: pointer;
+  flex: 1; min-width: 0;
 }
 .agent-block:hover { background: var(--bg-hover); }
 .agent-block.online { border-color: rgba(52,211,153,0.15); box-shadow: 0 0 12px rgba(52,211,153,0.06); }
