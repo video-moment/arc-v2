@@ -87,7 +87,6 @@ body {
 }
 .agent-block:hover { background: var(--bg-hover); }
 .agent-block.online { border-color: rgba(52,211,153,0.15); box-shadow: 0 0 12px rgba(52,211,153,0.06); }
-.agent-block.selected { border-color: rgba(139,92,246,0.3); background: var(--accent-soft); }
 .agent-block .agent-icon {
   width: 40px; height: 40px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
@@ -102,48 +101,6 @@ body {
 .status-indicator.offline { background: var(--text3); }
 .status-indicator.error { background: var(--red); }
 
-/* 활동 패널 */
-.activity-panel {
-  margin-top: 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--bg-card-border);
-  border-radius: 14px;
-  overflow: hidden;
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-}
-.activity-header {
-  padding: 10px 14px 8px;
-  display: flex; align-items: center; justify-content: space-between;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-.activity-agent-name { font-size: 12px; font-weight: 700; }
-.activity-close {
-  -webkit-app-region: no-drag;
-  width: 22px; height: 22px; border: none; background: transparent;
-  color: var(--text3); cursor: pointer; border-radius: 6px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px;
-}
-.activity-close:hover { background: var(--bg-hover); color: var(--text); }
-
-.activity-section {
-  padding: 10px 14px;
-}
-.activity-section + .activity-section {
-  border-top: 1px solid rgba(255,255,255,0.04);
-}
-.activity-label {
-  font-size: 9px; font-weight: 600; color: var(--text3);
-  text-transform: uppercase; letter-spacing: 0.6px;
-  margin-bottom: 6px;
-}
-.activity-value {
-  font-size: 11px; line-height: 1.5; color: var(--text2);
-  display: -webkit-box; -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical; overflow: hidden;
-}
-.activity-value.current { color: var(--text); }
-
 /* 스케줄 태그 */
 .schedule-tag {
   display: inline-flex; align-items: center; gap: 4px;
@@ -153,25 +110,6 @@ body {
 .schedule-tag.active { background: var(--blue-soft); color: var(--blue); }
 .schedule-tag.pending { background: var(--yellow-soft); color: var(--yellow); }
 .schedule-tag.idle { background: rgba(255,255,255,0.05); color: var(--text3); }
-
-/* 메시지 미리보기 */
-.msg-preview {
-  background: rgba(255,255,255,0.03);
-  border-radius: 8px;
-  padding: 8px 10px;
-  margin-top: 4px;
-}
-.msg-role {
-  font-size: 9px; font-weight: 600; color: var(--accent);
-  margin-bottom: 2px; text-transform: uppercase;
-}
-.msg-text {
-  font-size: 11px; color: var(--text2); line-height: 1.5;
-  display: -webkit-box; -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical; overflow: hidden;
-  -webkit-user-select: text; user-select: text;
-}
-.msg-time { font-size: 9px; color: var(--text3); margin-top: 3px; }
 
 .section-label {
   font-size: 10px; font-weight: 600; color: var(--text3);
@@ -241,8 +179,6 @@ let sessions = {};      // agentId → session
 let lastMessages = {};   // agentId → { role, content, created_at }
 let connected = false;
 let pinned = false;
-let selectedAgent = null;
-let loadingActivity = false;
 
 function timeAgo(ts) {
   if (!ts) return '';
@@ -313,41 +249,10 @@ function togglePin() {
   render();
 }
 
-async function selectAgent(agentId) {
-  if (selectedAgent === agentId) { selectedAgent = null; render(); return; }
-  selectedAgent = agentId;
-  loadingActivity = true;
-  render();
-
-  // 세션 + 최근 메시지 로드
-  try {
-    const { data: sessionData } = await sb
-      .from('chat_sessions')
-      .select('*')
-      .eq('agent_id', agentId)
-      .order('updated_at', { ascending: false })
-      .limit(1);
-
-    if (sessionData && sessionData[0]) {
-      sessions[agentId] = sessionData[0];
-      const { data: msgData } = await sb
-        .from('chat_messages')
-        .select('*')
-        .eq('session_id', sessionData[0].id)
-        .order('created_at', { ascending: false })
-        .limit(3);
-      if (msgData && msgData.length > 0) {
-        lastMessages[agentId] = msgData[0];
-        // 최근 3개 저장
-        sessions[agentId]._recentMessages = msgData.reverse();
-      }
-    }
-  } catch (e) {
-    console.error('activity load error:', e);
-  }
-
-  loadingActivity = false;
-  render();
+function openAgent(agentId) {
+  const url = DASHBOARD_URL + '/agents/' + agentId;
+  if (window.electronAPI?.openExternal) window.electronAPI.openExternal(url);
+  else window.open(url, '_blank');
 }
 
 let renderTimer = null;
@@ -382,7 +287,6 @@ function render() {
         <div class="agents-grid">
           ${agents.map(a => agentBlock(a)).join('')}
         </div>
-        ${selectedAgent ? activityPanel(selectedAgent) : ''}
       ` : `
         <div class="empty-state fade-in">
           <div class="empty-icon">📡</div>
@@ -406,11 +310,10 @@ function render() {
 function agentBlock(agent) {
   const meta = TYPE_META[agent.type] || TYPE_META.custom;
   const isOnline = agent.status === 'online';
-  const isSelected = selectedAgent === agent.id;
   const activity = getAgentActivity(agent);
 
   return `
-    <div class="agent-block ${isOnline ? 'online' : ''} ${isSelected ? 'selected' : ''} fade-in" onclick="selectAgent('${agent.id}')">
+    <div class="agent-block ${isOnline ? 'online' : ''} fade-in" onclick="openAgent('${agent.id}')">
       <div class="agent-icon">${meta.icon}</div>
       <div class="agent-name">${agent.name}</div>
       <div class="agent-meta">
@@ -421,62 +324,6 @@ function agentBlock(agent) {
   `;
 }
 
-function activityPanel(agentId) {
-  const agent = agents.find(a => a.id === agentId);
-  if (!agent) return '';
-
-  if (loadingActivity) {
-    return `
-      <div class="activity-panel slide-down">
-        <div style="padding:20px;text-align:center">
-          <span class="mini-spinner"></span>
-          <span style="font-size:11px;color:var(--text3);margin-left:8px">불러오는 중...</span>
-        </div>
-      </div>
-    `;
-  }
-
-  const activity = getAgentActivity(agent);
-  const session = sessions[agentId];
-  const recentMsgs = session?._recentMessages || [];
-
-  return `
-    <div class="activity-panel slide-down">
-      <div class="activity-header">
-        <span class="activity-agent-name">${agent.name}</span>
-        <button class="activity-close" onclick="selectedAgent=null;render()">✕</button>
-      </div>
-
-      <div class="activity-section">
-        <div class="activity-label">현재 상태</div>
-        <div>
-          <span class="schedule-tag ${activity.status}">${activity.label}</span>
-        </div>
-        <div class="activity-value current" style="margin-top:6px">${activity.desc}</div>
-      </div>
-
-      ${session ? `
-        <div class="activity-section">
-          <div class="activity-label">세션: ${session.title || '기본'}</div>
-          ${recentMsgs.length > 0 ? recentMsgs.map(m => `
-            <div class="msg-preview">
-              <div class="msg-role">${m.role === 'assistant' ? '🤖 에이전트' : '👤 사용자'}</div>
-              <div class="msg-text">${stripMarkdown(m.content)}</div>
-              <div class="msg-time">${timeAgo(m.created_at)}</div>
-            </div>
-          `).join('') : `
-            <div class="activity-value">메시지 없음</div>
-          `}
-        </div>
-      ` : `
-        <div class="activity-section">
-          <div class="activity-label">활동 내역</div>
-          <div class="activity-value">세션 없음</div>
-        </div>
-      `}
-    </div>
-  `;
-}
 
 function openDashboard() {
   if (window.electronAPI?.openExternal) window.electronAPI.openExternal(DASHBOARD_URL);
@@ -548,10 +395,6 @@ function subscribe() {
       for (const [agentId, session] of Object.entries(sessions)) {
         if (session && session.id === msg.session_id) {
           lastMessages[agentId] = msg;
-          if (session._recentMessages) {
-            session._recentMessages.push(msg);
-            if (session._recentMessages.length > 3) session._recentMessages.shift();
-          }
           scheduleRender();
           break;
         }
