@@ -55,10 +55,10 @@ export default function MonitorPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] overflow-hidden animate-fade-in">
-      <div className="grid grid-cols-4 gap-2 h-full">
+    <div className="fixed inset-0 left-60 flex flex-col p-2 overflow-hidden animate-fade-in">
+      <div className="grid grid-cols-4 gap-2 flex-1 min-h-0">
         {slots.map((agentId, i) => (
-          <div key={i} className="min-w-0 h-full">
+          <div key={i} className="min-w-0 min-h-0 overflow-hidden">
             {agentId ? (
               <ChatPane
                 agentId={agentId}
