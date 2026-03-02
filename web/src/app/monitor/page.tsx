@@ -55,7 +55,7 @@ export default function MonitorPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-2rem)] p-2 animate-fade-in">
+    <div className="h-[calc(100vh-4rem)] overflow-hidden animate-fade-in">
       <div className="grid grid-cols-4 gap-2 h-full">
         {slots.map((agentId, i) => (
           <div key={i} className="min-w-0 h-full">
