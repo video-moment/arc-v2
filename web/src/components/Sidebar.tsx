@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSidebar } from './SidebarContext';
 
 const NAV = [
   { href: '/', label: '에이전트', icon: (
@@ -28,37 +29,60 @@ const NAV = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { collapsed, toggle } = useSidebar();
 
   return (
     <aside
-      className="fixed left-0 top-0 h-full w-60 flex flex-col z-50"
-      style={{ background: 'var(--bg-secondary)', borderRight: '1px solid var(--border-subtle)' }}
+      className="fixed left-0 top-0 h-full flex flex-col z-50 transition-all duration-200"
+      style={{
+        width: collapsed ? '56px' : '240px',
+        background: 'var(--bg-secondary)',
+        borderRight: '1px solid var(--border-subtle)',
+      }}
     >
-      {/* Logo */}
-      <div className="px-6 py-6">
-        <Link href="/" className="flex items-center gap-2.5">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold"
-            style={{ background: 'var(--gradient-accent)' }}
-          >
-            A
-          </div>
-          <div>
-            <span className="text-sm font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              ARC V2
-            </span>
-            <p className="text-[10px] leading-tight" style={{ color: 'var(--text-tertiary)' }}>
-              에이전트 대시보드
-            </p>
-          </div>
-        </Link>
+      {/* Logo + Toggle */}
+      <div className={`flex items-center ${collapsed ? 'justify-center px-2' : 'justify-between px-6'} py-6`}>
+        {!collapsed && (
+          <Link href="/" className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
+              style={{ background: 'var(--gradient-accent)' }}
+            >
+              A
+            </div>
+            <div>
+              <span className="text-sm font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                ARC V2
+              </span>
+              <p className="text-[10px] leading-tight" style={{ color: 'var(--text-tertiary)' }}>
+                에이전트 대시보드
+              </p>
+            </div>
+          </Link>
+        )}
+        <button
+          onClick={toggle}
+          className="w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer shrink-0"
+          style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}
+          title={collapsed ? '메뉴 펼치기' : '메뉴 접기'}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {collapsed ? (
+              <path d="M9 18l6-6-6-6"/>
+            ) : (
+              <path d="M15 18l-6-6 6-6"/>
+            )}
+          </svg>
+        </button>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3">
-        <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>
-          메뉴
-        </p>
+      <nav className="flex-1 px-2">
+        {!collapsed && (
+          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-tertiary)' }}>
+            메뉴
+          </p>
+        )}
         <div className="space-y-0.5">
           {NAV.map(({ href, label, icon }) => {
             const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
@@ -66,15 +90,16 @@ export default function Sidebar() {
               <Link
                 key={href}
                 href={href}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150"
+                className={`flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150`}
                 style={{
                   background: active ? 'var(--accent-soft)' : 'transparent',
                   color: active ? 'var(--accent-hover)' : 'var(--text-secondary)',
                 }}
+                title={collapsed ? label : undefined}
               >
                 <span style={{ opacity: active ? 1 : 0.6 }}>{icon}</span>
-                {label}
-                {active && (
+                {!collapsed && label}
+                {!collapsed && active && (
                   <span
                     className="ml-auto w-1.5 h-1.5 rounded-full"
                     style={{ background: 'var(--accent)' }}
@@ -87,12 +112,14 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-6 py-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+      <div className={`${collapsed ? 'px-2 justify-center' : 'px-6'} py-4 flex`} style={{ borderTop: '1px solid var(--border-subtle)' }}>
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full animate-pulse-dot" style={{ background: 'var(--green)' }} />
-          <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-            백엔드 연결됨
-          </span>
+          <span className="w-2 h-2 rounded-full animate-pulse-dot shrink-0" style={{ background: 'var(--green)' }} />
+          {!collapsed && (
+            <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+              백엔드 연결됨
+            </span>
+          )}
         </div>
       </div>
     </aside>

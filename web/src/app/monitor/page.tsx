@@ -1,21 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { getAgents, type Agent } from '@/lib/api';
 import ChatPane from '@/components/ChatPane';
+import { useSidebar } from '@/components/SidebarContext';
 
 export default function MonitorPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [slots, setSlots] = useState<string[]>(['', '', '', '']);
   const [loading, setLoading] = useState(true);
+  const [focusedSlot, setFocusedSlot] = useState(0);
+  const { collapsed } = useSidebar();
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null, null]);
 
   useEffect(() => {
     (async () => {
       try {
         const allAgents = await getAgents();
         setAgents(allAgents);
-
-        // 온라인 에이전트 우선 배치
         const online = allAgents.filter(a => a.status === 'online');
         const offline = allAgents.filter(a => a.status !== 'online');
         const sorted = [...online, ...offline];
@@ -29,6 +31,38 @@ export default function MonitorPage() {
     })();
   }, []);
 
+  // Cmd+1~4 단축키 + 좌우 방향키
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+1 ~ Cmd+4
+      if (e.metaKey && e.key >= '1' && e.key <= '4') {
+        e.preventDefault();
+        const idx = parseInt(e.key) - 1;
+        setFocusedSlot(idx);
+        setTimeout(() => inputRefs.current[idx]?.focus(), 50);
+        return;
+      }
+
+      // 좌우 방향키 (입력창에 텍스트가 없을 때만)
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const active = document.activeElement as HTMLInputElement;
+        // 입력창에 포커스돼 있고 텍스트가 있으면 기본 커서 이동
+        if (active?.tagName === 'INPUT' && active.value) return;
+
+        e.preventDefault();
+        const dir = e.key === 'ArrowLeft' ? -1 : 1;
+        setFocusedSlot(prev => {
+          const next = (prev + dir + 4) % 4;
+          setTimeout(() => inputRefs.current[next]?.focus(), 50);
+          return next;
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleChangeAgent = (slotIndex: number, newId: string) => {
     setSlots(prev => {
       const next = [...prev];
@@ -36,6 +70,10 @@ export default function MonitorPage() {
       return next;
     });
   };
+
+  const registerInputRef = useCallback((index: number, el: HTMLInputElement | null) => {
+    inputRefs.current[index] = el;
+  }, []);
 
   if (loading) {
     return (
@@ -54,16 +92,31 @@ export default function MonitorPage() {
     );
   }
 
+  const sidebarWidth = collapsed ? '56px' : '240px';
+
   return (
-    <div className="fixed inset-0 left-60 flex flex-col p-2 overflow-hidden animate-fade-in">
+    <div
+      className="fixed inset-0 flex flex-col p-2 overflow-hidden animate-fade-in transition-all duration-200"
+      style={{ left: sidebarWidth }}
+    >
       <div className="grid grid-cols-4 gap-2 flex-1 min-h-0">
         {slots.map((agentId, i) => (
-          <div key={i} className="min-w-0 min-h-0 overflow-hidden">
+          <div
+            key={i}
+            className="min-w-0 min-h-0 overflow-hidden cursor-pointer"
+            onClick={() => {
+              setFocusedSlot(i);
+              inputRefs.current[i]?.focus();
+            }}
+          >
             {agentId ? (
               <ChatPane
                 agentId={agentId}
                 agents={agents}
                 onChangeAgent={(newId) => handleChangeAgent(i, newId)}
+                focused={focusedSlot === i}
+                slotIndex={i}
+                inputRef={(el) => registerInputRef(i, el)}
               />
             ) : (
               <div
@@ -86,6 +139,19 @@ export default function MonitorPage() {
             )}
           </div>
         ))}
+      </div>
+
+      {/* 단축키 안내 */}
+      <div className="flex items-center justify-center gap-4 py-1.5 shrink-0">
+        {[1, 2, 3, 4].map(n => (
+          <span key={n} className="text-[10px] flex items-center gap-1" style={{ color: focusedSlot === n - 1 ? 'var(--accent)' : 'var(--text-tertiary)' }}>
+            <kbd className="px-1 py-0.5 rounded text-[9px] font-mono" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>⌘{n}</kbd>
+          </span>
+        ))}
+        <span className="text-[10px] flex items-center gap-1" style={{ color: 'var(--text-tertiary)' }}>
+          <kbd className="px-1 py-0.5 rounded text-[9px] font-mono" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)' }}>← →</kbd>
+          이동
+        </span>
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Sidebar from '@/components/Sidebar';
+import { SidebarProvider } from '@/components/SidebarContext';
+import { LayoutMain } from '@/components/LayoutMain';
 
 export const metadata: Metadata = {
   title: 'ARC V2',
@@ -14,10 +16,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
       </head>
       <body className="antialiased">
-        <Sidebar />
-        <main className="ml-60 min-h-screen p-8">
-          {children}
-        </main>
+        <SidebarProvider>
+          <Sidebar />
+          <LayoutMain>{children}</LayoutMain>
+        </SidebarProvider>
       </body>
     </html>
   );

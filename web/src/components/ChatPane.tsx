@@ -10,9 +10,12 @@ interface ChatPaneProps {
   agentId: string;
   agents: Agent[];
   onChangeAgent: (newId: string) => void;
+  focused?: boolean;
+  slotIndex?: number;
+  inputRef?: (el: HTMLInputElement | null) => void;
 }
 
-export default function ChatPane({ agentId, agents, onChangeAgent }: ChatPaneProps) {
+export default function ChatPane({ agentId, agents, onChangeAgent, focused, slotIndex, inputRef }: ChatPaneProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -21,6 +24,7 @@ export default function ChatPane({ agentId, agents, onChangeAgent }: ChatPanePro
   const [waitingReply, setWaitingReply] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const localInputRef = useRef<HTMLInputElement>(null);
   const seenIds = useRef(new Set<string>());
   const syncingRef = useRef(false);
   const msgCountRef = useRef(0);
@@ -152,15 +156,29 @@ export default function ChatPane({ agentId, agents, onChangeAgent }: ChatPanePro
     }
   };
 
+  const setRef = (el: HTMLInputElement | null) => {
+    localInputRef.current = el;
+    inputRef?.(el);
+  };
+
   return (
-    <div className="flex flex-col h-full overflow-hidden rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+    <div
+      className="flex flex-col h-full overflow-hidden rounded-xl transition-all duration-150"
+      style={{
+        background: 'var(--bg-secondary)',
+        border: focused ? '2px solid var(--accent)' : '1px solid var(--border)',
+        boxShadow: focused ? '0 0 12px rgba(139,92,246,0.2)' : 'none',
+      }}
+    >
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
         <div
           className="w-7 h-7 rounded-lg flex items-center justify-center text-xs shrink-0"
           style={{ background: 'var(--accent-soft)' }}
         >
-          ⚡
+          {slotIndex !== undefined ? (
+            <span className="text-[10px] font-bold" style={{ color: 'var(--accent)' }}>{slotIndex + 1}</span>
+          ) : '⚡'}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
@@ -208,6 +226,7 @@ export default function ChatPane({ agentId, agents, onChangeAgent }: ChatPanePro
       <div className="px-2 py-2 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="flex gap-1.5">
           <input
+            ref={setRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
