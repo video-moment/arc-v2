@@ -48,7 +48,7 @@ function MediaContent({ message }: { message: ChatMessage }) {
   return null;
 }
 
-export default function ChatBubble({ message }: { message: ChatMessage }) {
+export default function ChatBubble({ message, compact }: { message: ChatMessage; compact?: boolean }) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
 
@@ -61,23 +61,23 @@ export default function ChatBubble({ message }: { message: ChatMessage }) {
   };
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 animate-fade-in group`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} ${compact ? 'mb-2' : 'mb-4'} animate-fade-in group`}>
       {!isUser && (
         <div
-          className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold mr-2 mt-1 shrink-0"
+          className={`${compact ? 'w-5 h-5 text-[9px]' : 'w-7 h-7 text-[11px]'} rounded-full flex items-center justify-center font-bold mr-2 mt-1 shrink-0`}
           style={{ background: 'var(--accent-soft)', color: 'var(--accent-hover)' }}
         >
           {message.role.charAt(0).toUpperCase()}
         </div>
       )}
-      <div className="max-w-[72%]">
-        {!isUser && (
+      <div className={compact ? 'max-w-[85%]' : 'max-w-[72%]'}>
+        {!isUser && !compact && (
           <p className="text-[11px] font-medium mb-1 ml-1" style={{ color: 'var(--text-tertiary)' }}>
             {message.role}
           </p>
         )}
         <div
-          className="rounded-2xl px-4 py-3 relative cursor-pointer"
+          className={`${compact ? 'rounded-xl px-3 py-2' : 'rounded-2xl px-4 py-3'} relative cursor-pointer`}
           style={{
             background: isUser ? 'var(--gradient-accent)' : 'var(--bg-card)',
             border: isUser ? 'none' : '1px solid var(--border)',
@@ -107,11 +107,11 @@ export default function ChatBubble({ message }: { message: ChatMessage }) {
           )}
           {message.content && (
             isUser ? (
-              <p className="text-[13px] leading-relaxed whitespace-pre-wrap break-words">
+              <p className={`${compact ? 'text-[11px]' : 'text-[13px]'} leading-relaxed whitespace-pre-wrap break-words`}>
                 {message.content}
               </p>
             ) : (
-              <div className="markdown-body text-[13px] leading-relaxed break-words">
+              <div className={`markdown-body ${compact ? 'text-[11px]' : 'text-[13px]'} leading-relaxed break-words`}>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {message.content}
                 </ReactMarkdown>
@@ -119,7 +119,7 @@ export default function ChatBubble({ message }: { message: ChatMessage }) {
             )
           )}
         </div>
-        <p className={`text-[10px] mt-1 ${isUser ? 'text-right mr-1' : 'ml-1'}`} style={{ color: 'var(--text-tertiary)' }}>
+        <p className={`${compact ? 'text-[9px]' : 'text-[10px]'} mt-1 ${isUser ? 'text-right mr-1' : 'ml-1'}`} style={{ color: 'var(--text-tertiary)' }}>
           {formatTime(message.createdAt)}
         </p>
       </div>
