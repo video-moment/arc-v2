@@ -183,7 +183,7 @@ export default function ChatPane({ agentId, agents, onChangeAgent }: ChatPanePro
       </div>
 
       {/* Messages */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-2 py-2">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto px-2 py-2">
         {loading ? (
           <div className="flex items-center gap-2 py-8 justify-center">
             <div className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
