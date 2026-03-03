@@ -93,6 +93,14 @@ export interface PomoSession {
   isCompleted: boolean;
 }
 
+export interface MessageReaction {
+  id: string;
+  messageId: string;
+  agentId: string;
+  emoji: string;
+  createdAt: string;
+}
+
 // ── Helpers: snake_case ↔ camelCase ──
 
 function toAgent(row: any): Agent {
@@ -200,6 +208,16 @@ function toPomoSession(row: any): PomoSession {
   };
 }
 
+function toReaction(row: any): MessageReaction {
+  return {
+    id: row.id,
+    messageId: row.message_id,
+    agentId: row.agent_id,
+    emoji: row.emoji,
+    createdAt: row.created_at,
+  };
+}
+
 // ── Agents ──
 
 export async function getAgents(): Promise<Agent[]> {
@@ -278,6 +296,18 @@ export async function sendMessage(sessionId: string, content: string, role = 'us
     .single();
   if (error) throw error;
   return toMessage(data);
+}
+
+// ── Reactions ──
+
+export async function getReactions(messageIds: string[]): Promise<MessageReaction[]> {
+  if (messageIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('message_reactions')
+    .select('*')
+    .in('message_id', messageIds);
+  if (error) throw error;
+  return (data || []).map(toReaction);
 }
 
 // ── Pomodoro Projects ──
@@ -562,6 +592,7 @@ export interface NotePage {
   emoji: string;
   content: string;
   sortOrder: number;
+  isPinned: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -585,6 +616,7 @@ function toNotePage(row: any): NotePage {
     emoji: row.emoji || '📝',
     content: row.content || '',
     sortOrder: row.sort_order,
+    isPinned: row.is_pinned ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -647,12 +679,13 @@ export async function createNotePage(groupId: string, title: string, emoji = '�
   return toNotePage(data);
 }
 
-export async function updateNotePage(id: string, updates: Partial<Pick<NotePage, 'title' | 'emoji' | 'content' | 'sortOrder'>>): Promise<NotePage> {
+export async function updateNotePage(id: string, updates: Partial<Pick<NotePage, 'title' | 'emoji' | 'content' | 'sortOrder' | 'isPinned'>>): Promise<NotePage> {
   const dbUpdates: Record<string, any> = {};
   if (updates.title !== undefined) dbUpdates.title = updates.title;
   if (updates.emoji !== undefined) dbUpdates.emoji = updates.emoji;
   if (updates.content !== undefined) dbUpdates.content = updates.content;
   if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+  if (updates.isPinned !== undefined) dbUpdates.is_pinned = updates.isPinned;
   const { data, error } = await supabase
     .from('note_pages')
     .update(dbUpdates)

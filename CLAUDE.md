@@ -53,6 +53,14 @@ npm test              # vitest
 - `GET /api/telegram/bots` — 연결된 봇 목록
 - `WS /ws` — WebSocket (subscribe/unsubscribe by sessionId)
 
+## DB 안전 규칙 (절대 준수)
+
+- **마이그레이션에서 `CREATE TABLE`은 반드시 `IF NOT EXISTS` 사용** — 기존 테이블을 덮어쓰면 데이터 유실
+- **`DROP TABLE` 절대 금지** — 어떤 이유로든 테이블을 DROP하지 않는다
+- **`ALTER TABLE`로 컬럼 추가 시 `IF NOT EXISTS` 사용** — 중복 실행 안전성 확보
+- note_pages, note_groups에는 삭제 감사(audit) 트리거가 설치되어 있음 → `note_pages_audit`, `note_groups_audit` 테이블에 삭제 기록 자동 보관
+- Supabase 프로젝트: `yvzirvyxpqvqusxigicy` (DOKKAEBI, Pro 플랜)
+
 ## MCP 도구
 
 | 도구 | 용도 |
