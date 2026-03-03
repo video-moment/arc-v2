@@ -7,7 +7,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 인증 불필요 경로
-  if (pathname.startsWith('/api/') || pathname === '/login') {
+  if (pathname.startsWith('/api/') || pathname === '/login' || pathname === '/ws') {
     return NextResponse.next();
   }
 

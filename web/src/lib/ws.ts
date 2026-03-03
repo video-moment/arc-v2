@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabase';
-import type { ChatMessage } from './api';
+import type { ChatMessage, MessageReaction } from './api';
 
 function toMessage(row: any): ChatMessage {
   return {
@@ -46,4 +46,50 @@ export function useRealtimeMessages(
       supabase.removeChannel(channel);
     };
   }, [sessionId]);
+}
+
+function toReaction(row: any): MessageReaction {
+  return {
+    id: row.id,
+    messageId: row.message_id,
+    agentId: row.agent_id,
+    emoji: row.emoji,
+    createdAt: row.created_at,
+  };
+}
+
+export function useRealtimeReactions(
+  messageIds: string[],
+  onNewReaction: (reaction: MessageReaction) => void
+) {
+  const callbackRef = useRef(onNewReaction);
+  callbackRef.current = onNewReaction;
+  const idsRef = useRef(messageIds);
+  idsRef.current = messageIds;
+
+  useEffect(() => {
+    if (messageIds.length === 0) return;
+
+    const channel = supabase
+      .channel('reactions:' + messageIds[0]?.slice(0, 8))
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'message_reactions',
+        },
+        (payload) => {
+          const reaction = toReaction(payload.new);
+          if (idsRef.current.includes(reaction.messageId)) {
+            callbackRef.current(reaction);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [messageIds.length > 0 ? messageIds[0] : null]);
 }

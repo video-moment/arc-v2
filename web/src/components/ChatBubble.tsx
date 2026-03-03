@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { ChatMessage } from '@/lib/api';
+import type { ChatMessage, MessageReaction } from '@/lib/api';
 
 function formatTime(ts: string | number): string {
   return new Date(ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -48,7 +48,7 @@ function MediaContent({ message }: { message: ChatMessage }) {
   return null;
 }
 
-export default function ChatBubble({ message, compact }: { message: ChatMessage; compact?: boolean }) {
+export default function ChatBubble({ message, compact, reactions }: { message: ChatMessage; compact?: boolean; reactions?: MessageReaction[] }) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
 
@@ -119,9 +119,30 @@ export default function ChatBubble({ message, compact }: { message: ChatMessage;
             )
           )}
         </div>
-        <p className={`${compact ? 'text-[9px]' : 'text-[10px]'} mt-1 ${isUser ? 'text-right mr-1' : 'ml-1'}`} style={{ color: 'var(--text-tertiary)' }}>
-          {formatTime(message.createdAt)}
-        </p>
+        <div className={`flex items-center gap-1.5 mt-1 ${isUser ? 'justify-end mr-1' : 'ml-1'}`}>
+          {reactions && reactions.length > 0 && (
+            <div
+              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
+              style={{ background: 'var(--bg-hover)', border: '1px solid var(--border)' }}
+            >
+              {/* group by emoji */}
+              {Object.entries(
+                reactions.reduce<Record<string, string[]>>((acc, r) => {
+                  (acc[r.emoji] = acc[r.emoji] || []).push(r.agentId);
+                  return acc;
+                }, {})
+              ).map(([emoji, agents]) => (
+                <span key={emoji} className="flex items-center gap-0.5 text-[10px]" title={agents.join(', ')}>
+                  <span>{emoji}</span>
+                  {agents.length > 1 && <span style={{ color: 'var(--text-tertiary)' }}>{agents.length}</span>}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className={`${compact ? 'text-[9px]' : 'text-[10px]'}`} style={{ color: 'var(--text-tertiary)' }}>
+            {formatTime(message.createdAt)}
+          </p>
+        </div>
       </div>
     </div>
   );

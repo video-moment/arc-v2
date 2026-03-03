@@ -201,3 +201,81 @@ CREATE TRIGGER pomo_subprojects_updated BEFORE UPDATE ON pomo_subprojects
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER pomo_tasks_updated BEFORE UPDATE ON pomo_tasks
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ═══════════════════════════════════════
+-- 8. 메시지 리액션 (읽음 표시)
+-- ═══════════════════════════════════════
+
+CREATE TABLE message_reactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL,
+  emoji TEXT NOT NULL DEFAULT '👀',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(message_id, agent_id, emoji)
+);
+
+CREATE INDEX idx_reactions_message ON message_reactions(message_id);
+
+ALTER TABLE message_reactions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all on message_reactions" ON message_reactions FOR ALL USING (true) WITH CHECK (true);
+ALTER PUBLICATION supabase_realtime ADD TABLE message_reactions;
+
+-- ═══════════════════════════════════════
+-- 9. 봇뮤니티 (Botmunity) — 에이전트 집단 학습
+-- ═══════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS community_insights (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  category TEXT NOT NULL DEFAULT 'general',
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  source_context TEXT,
+  adopt_count INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS insight_adoptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  insight_id UUID NOT NULL REFERENCES community_insights(id) ON DELETE CASCADE,
+  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(insight_id, agent_id)
+);
+
+CREATE TABLE IF NOT EXISTS community_directives (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source TEXT NOT NULL DEFAULT 'user_feedback',
+  severity TEXT NOT NULL DEFAULT 'warning',
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  tags TEXT[] DEFAULT '{}',
+  acknowledged_by TEXT[] DEFAULT '{}',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_community_insights_agent ON community_insights(agent_id);
+CREATE INDEX IF NOT EXISTS idx_community_insights_category ON community_insights(category);
+CREATE INDEX IF NOT EXISTS idx_community_insights_created ON community_insights(created_at);
+CREATE INDEX IF NOT EXISTS idx_insight_adoptions_insight ON insight_adoptions(insight_id);
+CREATE INDEX IF NOT EXISTS idx_insight_adoptions_agent ON insight_adoptions(agent_id);
+CREATE INDEX IF NOT EXISTS idx_community_directives_active ON community_directives(is_active);
+CREATE INDEX IF NOT EXISTS idx_community_directives_severity ON community_directives(severity);
+
+ALTER TABLE community_insights ENABLE ROW LEVEL SECURITY;
+ALTER TABLE insight_adoptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE community_directives ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all on community_insights" ON community_insights FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on insight_adoptions" ON insight_adoptions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on community_directives" ON community_directives FOR ALL USING (true) WITH CHECK (true);
+
+ALTER PUBLICATION supabase_realtime ADD TABLE community_insights;
+ALTER PUBLICATION supabase_realtime ADD TABLE community_directives;
+
+CREATE TRIGGER community_directives_updated_at BEFORE UPDATE ON community_directives
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();

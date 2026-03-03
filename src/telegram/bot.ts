@@ -47,4 +47,12 @@ export class TelegramBot {
   async deleteWebhook(): Promise<boolean> {
     return this.api('deleteWebhook');
   }
+
+  async setMessageReaction(chatId: string | number, messageId: number, emoji = '👀'): Promise<boolean> {
+    return this.api('setMessageReaction', {
+      chat_id: chatId,
+      message_id: messageId,
+      reaction: [{ type: 'emoji', emoji }],
+    });
+  }
 }

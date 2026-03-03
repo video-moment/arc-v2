@@ -3,8 +3,8 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getAgent, getMessages, sendMessage, sendTelegram, type Agent, type ChatMessage } from '@/lib/api';
-import { useRealtimeMessages } from '@/lib/ws';
+import { getAgent, getMessages, getReactions, sendMessage, sendTelegram, type Agent, type ChatMessage, type MessageReaction } from '@/lib/api';
+import { useRealtimeMessages, useRealtimeReactions } from '@/lib/ws';
 import ChatBubble from '@/components/ChatBubble';
 import StatusBadge from '@/components/StatusBadge';
 
@@ -16,6 +16,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
   const [sendViaTelegram, setSendViaTelegram] = useState(false);
+  const [reactions, setReactions] = useState<MessageReaction[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const seenIds = useRef(new Set<string>());
 
@@ -24,6 +25,10 @@ export default function ChatPage() {
     getMessages(sessionId).then(msgs => {
       setMessages(msgs);
       msgs.forEach(m => seenIds.current.add(m.id));
+      const ids = msgs.map(m => m.id);
+      if (ids.length > 0) {
+        getReactions(ids).then(setReactions).catch(console.error);
+      }
     }).catch(console.error);
   }, [id, sessionId]);
 
@@ -35,6 +40,16 @@ export default function ChatPage() {
   }, []);
 
   useRealtimeMessages(sessionId, handleNewMessage);
+
+  const handleNewReaction = useCallback((reaction: MessageReaction) => {
+    setReactions(prev => {
+      if (prev.some(r => r.id === reaction.id)) return prev;
+      return [...prev, reaction];
+    });
+  }, []);
+
+  const messageIds = messages.map(m => m.id);
+  useRealtimeReactions(messageIds, handleNewReaction);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -103,7 +118,13 @@ export default function ChatPage() {
             <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>메시지를 보내 대화를 시작하세요</p>
           </div>
         )}
-        {messages.map(m => <ChatBubble key={m.id} message={m} />)}
+        {messages.map(m => (
+          <ChatBubble
+            key={m.id}
+            message={m}
+            reactions={reactions.filter(r => r.messageId === m.id)}
+          />
+        ))}
         <div ref={bottomRef} />
       </div>
 

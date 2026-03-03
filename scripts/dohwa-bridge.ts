@@ -224,6 +224,13 @@ async function pollLoop() {
 
         console.log(`[Message] ${userName}: ${text.slice(0, 80)}`);
 
+        // React with 👀 to show the bot saw the message
+        await tgApi('setMessageReaction', {
+          chat_id: chatId,
+          message_id: msg.message_id,
+          reaction: [{ type: 'emoji', emoji: '👀' }],
+        });
+
         // Send typing indicator
         await sendTyping(chatId);
 

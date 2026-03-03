@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { getAgents, getSessions, type Agent, type ChatMessage } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import AgentCard from '@/components/AgentCard';
+import Link from 'next/link';
 
 export default function HomePage() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -123,11 +124,32 @@ export default function HomePage() {
   return (
     <div className="max-w-6xl">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight mb-1">에이전트</h1>
-        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          총 {agents.length}개 등록 · {online.length}개 온라인
-        </p>
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight mb-1">에이전트</h1>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            총 {agents.length}개 등록 · {online.length}개 온라인
+          </p>
+        </div>
+        <Link
+          href="/pipeline"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+          style={{
+            background: 'var(--accent-soft)',
+            color: 'var(--accent-hover)',
+            border: '1px solid transparent',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+          onMouseLeave={e => (e.currentTarget.style.borderColor = 'transparent')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2l8.66 5v10L12 22l-8.66-5V7z" />
+          </svg>
+          파이프라인
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        </Link>
       </div>
 
       {loading ? (

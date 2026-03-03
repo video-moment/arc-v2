@@ -8,7 +8,7 @@ export type McpDeps = {
 export const TOOL_DEFINITIONS = [
   {
     name: 'arc_register_agent',
-    description: 'Register or update an external agent in the ARC monitoring dashboard.',
+    description: 'Register or update an external agent in the ARC monitoring dashboard. ARC는 당신의 활동을 모니터링하는 대시보드입니다. 등록 후 arc_update_profile로 페르소나, 지침, 능력 등을 업로드하세요. arc_heartbeat로 주기적으로 상태를 보고하고, arc_push_message로 중요한 대화를 기록하세요.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -135,6 +135,21 @@ export const TOOL_DEFINITIONS = [
       required: ['groupId', 'title'],
     },
   },
+  // ── Reactions ──────────────────────────────────────
+  {
+    name: 'arc_react_message',
+    description: 'Add a reaction (emoji) to a chat message. Use 👀 to indicate the agent has read/seen the message.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        messageId: { type: 'string', description: 'Chat message ID to react to' },
+        agentId: { type: 'string', description: 'Agent ID who is reacting' },
+        emoji: { type: 'string', description: 'Reaction emoji (default: 👀)' },
+      },
+      required: ['messageId', 'agentId'],
+    },
+  },
+
   {
     name: 'arc_update_note_page',
     description: 'Update a note page (title, content, emoji). Content supports markdown.',
@@ -147,6 +162,161 @@ export const TOOL_DEFINITIONS = [
         content: { type: 'string', description: 'New content (markdown)' },
       },
       required: ['id'],
+    },
+  },
+
+  // ── Agent Profile ──────────────────────────────────
+  {
+    name: 'arc_update_profile',
+    description: 'Update a section of your agent profile. Sections can be anything: persona, instructions, capabilities, goals, changelog, etc. Each section is versioned — previous versions are automatically saved to history. Use this to continuously develop and share your identity with the ARC dashboard.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        agentId: { type: 'string', description: 'Your agent ID' },
+        section: { type: 'string', description: 'Section key (e.g. "persona", "instructions", "capabilities", "goals")' },
+        title: { type: 'string', description: 'Display title for the section (e.g. "페르소나", "지침")' },
+        content: { type: 'string', description: 'Section content in markdown' },
+        sortOrder: { type: 'number', description: 'Display order (lower = higher, default 0)' },
+      },
+      required: ['agentId', 'section', 'content'],
+    },
+  },
+  {
+    name: 'arc_get_profile',
+    description: 'Get all profile sections for an agent. Returns persona, instructions, capabilities, and any other sections the agent has uploaded.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        agentId: { type: 'string', description: 'Agent ID to look up' },
+      },
+      required: ['agentId'],
+    },
+  },
+  {
+    name: 'arc_delete_profile_section',
+    description: 'Delete a profile section.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        agentId: { type: 'string', description: 'Agent ID' },
+        section: { type: 'string', description: 'Section key to delete' },
+      },
+      required: ['agentId', 'section'],
+    },
+  },
+
+  // ── Domains ──────────────────────────────────────
+  {
+    name: 'arc_list_domains',
+    description: 'List all registered domains (agent team configurations).',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {},
+    },
+  },
+  {
+    name: 'arc_get_domain_rules',
+    description: 'Get validation/review rules for a domain. Returns rules with category, content, severity (error/warning/info). Use at session start to load review rules.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        domainId: { type: 'string', description: 'Domain ID (e.g. "dohwa-studio")' },
+        category: { type: 'string', description: 'Filter by category (optional)' },
+        severity: { type: 'string', description: 'Filter by severity: error, warning, info (optional)' },
+      },
+      required: ['domainId'],
+    },
+  },
+  {
+    name: 'arc_get_domain_prompts',
+    description: 'Get agent prompts for a domain. Returns planner, actor, reviewer prompts.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        domainId: { type: 'string', description: 'Domain ID' },
+        role: { type: 'string', description: 'Filter by role: planner, actor, reviewer (optional)' },
+      },
+      required: ['domainId'],
+    },
+  },
+  // ── Botmunity (봇뮤니티) ──────────────────────────
+  {
+    name: 'arc_post_insight',
+    description: '업무 중 발견한 인사이트를 봇뮤니티에 공유하세요. 좋은 패턴, 실수에서 배운 점, 효율적인 접근법 등. 다른 에이전트가 채택하면 전체 팀의 역량이 올라갑니다.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        agentId: { type: 'string', description: 'Your agent ID' },
+        category: { type: 'string', description: 'Category: workflow, quality, tool, domain, general' },
+        title: { type: 'string', description: 'Short title for the insight' },
+        content: { type: 'string', description: 'Insight content (markdown)' },
+        sourceContext: { type: 'string', description: 'What task/context led to this insight' },
+      },
+      required: ['agentId', 'title', 'content'],
+    },
+  },
+  {
+    name: 'arc_get_insights',
+    description: '봇뮤니티 인사이트 피드를 조회합니다. 카테고리 필터, 채택순/최신순 정렬 가능.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        category: { type: 'string', description: 'Filter by category (optional)' },
+        sortBy: { type: 'string', enum: ['recent', 'popular'], description: 'Sort order: recent (default) or popular (by adopt_count)' },
+        limit: { type: 'number', description: 'Max results (default 20)' },
+      },
+    },
+  },
+  {
+    name: 'arc_adopt_insight',
+    description: '유용한 인사이트를 채택합니다. 채택하면 adopt_count가 증가하고, 어떻게 적용했는지 메모를 남길 수 있습니다.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        insightId: { type: 'string', description: 'Insight ID to adopt' },
+        agentId: { type: 'string', description: 'Your agent ID' },
+        note: { type: 'string', description: 'How you applied this insight (optional)' },
+      },
+      required: ['insightId', 'agentId'],
+    },
+  },
+  {
+    name: 'arc_get_directives',
+    description: '사용자의 피드백과 지시사항을 확인하세요. 세션 시작 시 반드시 호출하여 최신 디렉티브를 확인하고, 같은 실수를 반복하지 마세요. 확인 후 arc_acknowledge_directive로 읽음 표시하세요.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        activeOnly: { type: 'boolean', description: 'Only return active directives (default true)' },
+      },
+    },
+  },
+  {
+    name: 'arc_acknowledge_directive',
+    description: '디렉티브를 확인했음을 표시합니다. acknowledged_by 배열에 에이전트 ID가 추가됩니다.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        directiveId: { type: 'string', description: 'Directive ID' },
+        agentId: { type: 'string', description: 'Your agent ID' },
+      },
+      required: ['directiveId', 'agentId'],
+    },
+  },
+
+  {
+    name: 'arc_save_feedback',
+    description: 'Save quality feedback for learning. Links to domain and optionally to a chat session.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        domainId: { type: 'string', description: 'Domain ID' },
+        sessionId: { type: 'string', description: 'Chat session ID (optional)' },
+        feedbackType: { type: 'string', enum: ['thumbs_up', 'thumbs_down'], description: 'Feedback type' },
+        category: { type: 'string', description: 'Feedback category (e.g. "trend_analysis", "scenario_review")' },
+        comment: { type: 'string', description: 'Feedback comment' },
+        flaggedExpressions: { type: 'array', items: { type: 'string' }, description: 'Flagged expressions found' },
+      },
+      required: ['domainId', 'feedbackType'],
     },
   },
 ];
@@ -277,6 +447,27 @@ export async function handleToolCall(
       return text({ sessions: data, count: data.length });
     }
 
+    // ── Reactions ──────────────────────────────────────
+
+    case 'arc_react_message': {
+      const { messageId, agentId, emoji } = args as {
+        messageId: string; agentId: string; emoji?: string;
+      };
+      const reactionEmoji = emoji || '👀';
+
+      const { data, error } = await supabase
+        .from('message_reactions')
+        .upsert(
+          { message_id: messageId, agent_id: agentId, emoji: reactionEmoji },
+          { onConflict: 'message_id,agent_id,emoji' }
+        )
+        .select()
+        .single();
+
+      if (error) return text({ error: error.message });
+      return text({ reaction: data, added: true });
+    }
+
     // ── Notes ──────────────────────────────────────────
 
     case 'arc_list_note_groups': {
@@ -367,6 +558,283 @@ export async function handleToolCall(
 
       if (error) return text({ error: error.message });
       return text({ page: data, updated: true });
+    }
+
+    // ── Agent Profile ──────────────────────────────────
+
+    case 'arc_update_profile': {
+      const { agentId, section, title, content: profileContent, sortOrder } = args as {
+        agentId: string; section: string; title?: string; content: string; sortOrder?: number;
+      };
+
+      // Check if section already exists
+      const { data: existing } = await supabase
+        .from('agent_profile_sections')
+        .select('*')
+        .eq('agent_id', agentId)
+        .eq('section_key', section)
+        .maybeSingle();
+
+      if (existing) {
+        // Save current version to history
+        await supabase.from('agent_profile_history').insert({
+          section_id: existing.id,
+          agent_id: agentId,
+          section_key: section,
+          content: existing.content,
+          version: existing.version,
+        });
+
+        // Update with new content + version++
+        const { data, error } = await supabase
+          .from('agent_profile_sections')
+          .update({
+            title: title || existing.title,
+            content: profileContent,
+            sort_order: sortOrder ?? existing.sort_order,
+            version: existing.version + 1,
+          })
+          .eq('id', existing.id)
+          .select()
+          .single();
+
+        if (error) return text({ error: error.message });
+        return text({ section: data, updated: true, previousVersion: existing.version });
+      } else {
+        // Create new section
+        const { data, error } = await supabase
+          .from('agent_profile_sections')
+          .insert({
+            agent_id: agentId,
+            section_key: section,
+            title: title || section,
+            content: profileContent,
+            sort_order: sortOrder ?? 0,
+            version: 1,
+          })
+          .select()
+          .single();
+
+        if (error) return text({ error: error.message });
+        return text({ section: data, created: true });
+      }
+    }
+
+    case 'arc_get_profile': {
+      const { agentId } = args as { agentId: string };
+      const { data, error } = await supabase
+        .from('agent_profile_sections')
+        .select('*')
+        .eq('agent_id', agentId)
+        .order('sort_order');
+
+      if (error) return text({ error: error.message });
+      return text({ agentId, sections: data, count: data.length });
+    }
+
+    case 'arc_delete_profile_section': {
+      const { agentId, section } = args as { agentId: string; section: string };
+      const { error } = await supabase
+        .from('agent_profile_sections')
+        .delete()
+        .eq('agent_id', agentId)
+        .eq('section_key', section);
+
+      if (error) return text({ error: error.message });
+      return text({ agentId, section, deleted: true });
+    }
+
+    // ── Domains ──────────────────────────────────────
+
+    case 'arc_list_domains': {
+      const { data, error } = await supabase
+        .from('domains')
+        .select('*')
+        .order('name');
+
+      if (error) return text({ error: error.message });
+      return text({ domains: data, count: data.length });
+    }
+
+    case 'arc_get_domain_rules': {
+      const { domainId, category, severity } = args as {
+        domainId: string; category?: string; severity?: string;
+      };
+      let query = supabase
+        .from('domain_rules')
+        .select('*')
+        .eq('domain_id', domainId)
+        .eq('is_active', true)
+        .order('severity');
+
+      if (category) query = query.eq('category', category);
+      if (severity) query = query.eq('severity', severity);
+
+      const { data, error } = await query;
+      if (error) return text({ error: error.message });
+      return text({ rules: data, count: data.length, domainId });
+    }
+
+    case 'arc_get_domain_prompts': {
+      const { domainId, role } = args as { domainId: string; role?: string };
+      let query = supabase
+        .from('domain_prompts')
+        .select('*')
+        .eq('domain_id', domainId);
+
+      if (role) query = query.eq('role', role);
+
+      const { data, error } = await query;
+      if (error) return text({ error: error.message });
+      return text({ prompts: data, count: data.length, domainId });
+    }
+
+    // ── Botmunity (봇뮤니티) ──────────────────────────
+
+    case 'arc_post_insight': {
+      const { agentId, category, title: insightTitle, content: insightContent, sourceContext } = args as {
+        agentId: string; category?: string; title: string; content: string; sourceContext?: string;
+      };
+
+      const { data, error } = await supabase
+        .from('community_insights')
+        .insert({
+          agent_id: agentId,
+          category: category || 'general',
+          title: insightTitle,
+          content: insightContent,
+          source_context: sourceContext || null,
+        })
+        .select()
+        .single();
+
+      if (error) return text({ error: error.message });
+      return text({ insight: data, posted: true });
+    }
+
+    case 'arc_get_insights': {
+      const { category, sortBy, limit } = args as {
+        category?: string; sortBy?: string; limit?: number;
+      };
+      const maxResults = limit || 20;
+
+      let query = supabase
+        .from('community_insights')
+        .select('*, agents(name)')
+        .limit(maxResults);
+
+      if (category) query = query.eq('category', category);
+
+      if (sortBy === 'popular') {
+        query = query.order('adopt_count', { ascending: false });
+      } else {
+        query = query.order('created_at', { ascending: false });
+      }
+
+      const { data, error } = await query;
+      if (error) return text({ error: error.message });
+      return text({ insights: data, count: data.length });
+    }
+
+    case 'arc_adopt_insight': {
+      const { insightId, agentId, note: adoptNote } = args as {
+        insightId: string; agentId: string; note?: string;
+      };
+
+      // Insert adoption record
+      const { data: adoption, error: adoptError } = await supabase
+        .from('insight_adoptions')
+        .upsert(
+          { insight_id: insightId, agent_id: agentId, note: adoptNote || null },
+          { onConflict: 'insight_id,agent_id' }
+        )
+        .select()
+        .single();
+
+      if (adoptError) return text({ error: adoptError.message });
+
+      // Increment adopt_count
+      const { error: updateError } = await supabase.rpc('increment_adopt_count', { insight_uuid: insightId }).single();
+
+      // Fallback: manually count if RPC doesn't exist
+      if (updateError) {
+        const { count } = await supabase
+          .from('insight_adoptions')
+          .select('*', { count: 'exact', head: true })
+          .eq('insight_id', insightId);
+
+        await supabase
+          .from('community_insights')
+          .update({ adopt_count: count || 0 })
+          .eq('id', insightId);
+      }
+
+      return text({ adoption, adopted: true });
+    }
+
+    case 'arc_get_directives': {
+      const { activeOnly } = args as { activeOnly?: boolean };
+      const showActiveOnly = activeOnly !== false;
+
+      let query = supabase
+        .from('community_directives')
+        .select('*')
+        .order('severity')
+        .order('created_at', { ascending: false });
+
+      if (showActiveOnly) query = query.eq('is_active', true);
+
+      const { data, error } = await query;
+      if (error) return text({ error: error.message });
+      return text({ directives: data, count: data.length });
+    }
+
+    case 'arc_acknowledge_directive': {
+      const { directiveId, agentId } = args as { directiveId: string; agentId: string };
+
+      // Get current acknowledged_by
+      const { data: directive, error: fetchErr } = await supabase
+        .from('community_directives')
+        .select('acknowledged_by')
+        .eq('id', directiveId)
+        .single();
+
+      if (fetchErr) return text({ error: fetchErr.message });
+
+      const currentList: string[] = directive.acknowledged_by || [];
+      if (!currentList.includes(agentId)) {
+        const { error: updateErr } = await supabase
+          .from('community_directives')
+          .update({ acknowledged_by: [...currentList, agentId] })
+          .eq('id', directiveId);
+
+        if (updateErr) return text({ error: updateErr.message });
+      }
+
+      return text({ directiveId, agentId, acknowledged: true });
+    }
+
+    case 'arc_save_feedback': {
+      const { domainId, sessionId, feedbackType, category, comment, flaggedExpressions } = args as {
+        domainId: string; sessionId?: string; feedbackType: string;
+        category?: string; comment?: string; flaggedExpressions?: string[];
+      };
+
+      const { data, error } = await supabase
+        .from('domain_feedback')
+        .insert({
+          domain_id: domainId,
+          session_id: sessionId || null,
+          feedback_type: feedbackType,
+          category: category || '',
+          comment: comment || '',
+          flagged_expressions: flaggedExpressions || [],
+        })
+        .select()
+        .single();
+
+      if (error) return text({ error: error.message });
+      return text({ feedback: data, saved: true });
     }
 
     default:

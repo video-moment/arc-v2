@@ -701,6 +701,221 @@ export async function deleteNotePage(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// ── Agent Profile ──
+
+export interface AgentProfileSection {
+  id: string;
+  agentId: string;
+  sectionKey: string;
+  title: string;
+  content: string;
+  sortOrder: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentProfileHistory {
+  id: string;
+  sectionId: string;
+  agentId: string;
+  sectionKey: string;
+  content: string;
+  version: number;
+  createdAt: string;
+}
+
+function toProfileSection(row: any): AgentProfileSection {
+  return {
+    id: row.id,
+    agentId: row.agent_id,
+    sectionKey: row.section_key,
+    title: row.title,
+    content: row.content,
+    sortOrder: row.sort_order,
+    version: row.version,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toProfileHistory(row: any): AgentProfileHistory {
+  return {
+    id: row.id,
+    sectionId: row.section_id,
+    agentId: row.agent_id,
+    sectionKey: row.section_key,
+    content: row.content,
+    version: row.version,
+    createdAt: row.created_at,
+  };
+}
+
+export async function getAgentProfile(agentId: string): Promise<AgentProfileSection[]> {
+  const { data, error } = await supabase
+    .from('agent_profile_sections')
+    .select('*')
+    .eq('agent_id', agentId)
+    .order('sort_order');
+  if (error) throw error;
+  return (data || []).map(toProfileSection);
+}
+
+export async function getProfileHistory(sectionId: string): Promise<AgentProfileHistory[]> {
+  const { data, error } = await supabase
+    .from('agent_profile_history')
+    .select('*')
+    .eq('section_id', sectionId)
+    .order('version', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(toProfileHistory);
+}
+
+// ── Schedule Messages ──
+
+// ── Botmunity (봇뮤니티) ──
+
+export interface CommunityInsight {
+  id: string;
+  agentId: string;
+  agentName?: string;
+  category: string;
+  title: string;
+  content: string;
+  sourceContext?: string;
+  adoptCount: number;
+  createdAt: string;
+}
+
+export interface InsightAdoption {
+  id: string;
+  insightId: string;
+  agentId: string;
+  note?: string;
+  createdAt: string;
+}
+
+export interface CommunityDirective {
+  id: string;
+  source: string;
+  severity: string;
+  title: string;
+  content: string;
+  tags: string[];
+  acknowledgedBy: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function toCommunityInsight(row: any): CommunityInsight {
+  return {
+    id: row.id,
+    agentId: row.agent_id,
+    agentName: row.agents?.name,
+    category: row.category,
+    title: row.title,
+    content: row.content,
+    sourceContext: row.source_context,
+    adoptCount: row.adopt_count,
+    createdAt: row.created_at,
+  };
+}
+
+function toCommunityDirective(row: any): CommunityDirective {
+  return {
+    id: row.id,
+    source: row.source,
+    severity: row.severity,
+    title: row.title,
+    content: row.content,
+    tags: row.tags || [],
+    acknowledgedBy: row.acknowledged_by || [],
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function getCommunityInsights(options?: { category?: string; limit?: number }): Promise<CommunityInsight[]> {
+  let query = supabase
+    .from('community_insights')
+    .select('*, agents(name)')
+    .order('created_at', { ascending: false })
+    .limit(options?.limit || 50);
+
+  if (options?.category) query = query.eq('category', options.category);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(toCommunityInsight);
+}
+
+export async function getCommunityDirectives(activeOnly = true): Promise<CommunityDirective[]> {
+  let query = supabase
+    .from('community_directives')
+    .select('*')
+    .order('severity')
+    .order('created_at', { ascending: false });
+
+  if (activeOnly) query = query.eq('is_active', true);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(toCommunityDirective);
+}
+
+export async function createDirective(input: {
+  title: string;
+  content: string;
+  severity?: string;
+  source?: string;
+  tags?: string[];
+}): Promise<CommunityDirective> {
+  const { data, error } = await supabase
+    .from('community_directives')
+    .insert({
+      title: input.title,
+      content: input.content,
+      severity: input.severity || 'warning',
+      source: input.source || 'user_feedback',
+      tags: input.tags || [],
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return toCommunityDirective(data);
+}
+
+export async function updateDirective(id: string, updates: Partial<{
+  title: string;
+  content: string;
+  severity: string;
+  tags: string[];
+  isActive: boolean;
+}>): Promise<CommunityDirective> {
+  const dbUpdates: Record<string, any> = {};
+  if (updates.title !== undefined) dbUpdates.title = updates.title;
+  if (updates.content !== undefined) dbUpdates.content = updates.content;
+  if (updates.severity !== undefined) dbUpdates.severity = updates.severity;
+  if (updates.tags !== undefined) dbUpdates.tags = updates.tags;
+  if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+
+  const { data, error } = await supabase
+    .from('community_directives')
+    .update(dbUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toCommunityDirective(data);
+}
+
+export async function deleteDirective(id: string): Promise<void> {
+  const { error } = await supabase.from('community_directives').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── Schedule Messages ──
 
 export async function getScheduleMessages(agentId: string): Promise<ChatMessage[]> {

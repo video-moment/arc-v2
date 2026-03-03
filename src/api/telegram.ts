@@ -85,6 +85,12 @@ export function createTelegramRoutes(db: ArcDatabase, monitor: Monitor): Router 
 
       // Update agent status
       db.updateAgentStatus(agentId, 'online');
+
+      // React with 👀 to show the bot saw the message
+      if (agent.telegramBotToken) {
+        const bot = getBot(agent.telegramBotToken, agentId);
+        bot.setMessageReaction(chatId, update.message.message_id).catch(() => {});
+      }
     }
 
     res.json({ ok: true });

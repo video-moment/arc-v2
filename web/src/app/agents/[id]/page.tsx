@@ -7,6 +7,7 @@ import { getAgent, getSessions, createSession, getMessages, sendTelegram, syncTe
 import ChatBubble from '@/components/ChatBubble';
 import StatusBadge from '@/components/StatusBadge';
 import TypingIndicator from '@/components/TypingIndicator';
+import AgentProfileView from '@/components/AgentProfileView';
 
 function formatDateLabel(dateStr: string): string {
   const date = new Date(dateStr);
@@ -50,6 +51,7 @@ export default function AgentChatPage() {
   const [schedules, setSchedules] = useState<ChatMessage[]>([]);
   const [showSchedule, setShowSchedule] = useState(false);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
+  const [activeTab, setActiveTab] = useState<'chat' | 'profile'>('chat');
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -388,6 +390,33 @@ export default function AgentChatPage() {
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex items-center gap-1 mb-4">
+        {(['chat', 'profile'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+            style={{
+              background: activeTab === tab ? 'var(--accent-soft)' : 'transparent',
+              color: activeTab === tab ? 'var(--accent)' : 'var(--text-tertiary)',
+            }}
+          >
+            {tab === 'chat' ? '💬 대화' : '📋 프로필'}
+          </button>
+        ))}
+      </div>
+
+      {/* Profile Tab */}
+      {activeTab === 'profile' && (
+        <div className="flex-1 overflow-y-auto pr-2">
+          <AgentProfileView agentId={id} />
+        </div>
+      )}
+
+      {/* Chat Tab */}
+      {activeTab === 'chat' && (<>
+
       {/* Schedule Panel */}
       {showSchedule && (
         <div
@@ -499,6 +528,8 @@ export default function AgentChatPage() {
           </button>
         </div>
       </div>
+
+      </>)}
     </div>
   );
 }
