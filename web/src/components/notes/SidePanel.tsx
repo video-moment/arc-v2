@@ -61,9 +61,16 @@ export default function SidePanel({
   const [newGroupName, setNewGroupName] = useState('');
   const [recentCollapsed, setRecentCollapsed] = useState(false);
   const [pinnedCollapsed, setPinnedCollapsed] = useState(false);
-  const [categoryManagerCollapsed, setCategoryManagerCollapsed] = useState(false);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const editRef = useRef<HTMLInputElement>(null);
   const createRef = useRef<HTMLInputElement>(null);
+
+  // 카테고리 색상 맵
+  const categoryColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    categories.forEach(c => map.set(c.id, c.color));
+    return map;
+  }, [categories]);
 
   // Drag state
   const [dragType, setDragType] = useState<'group' | 'page' | null>(null);
@@ -280,6 +287,9 @@ export default function SidePanel({
                     onMouseLeave={(e) => { if (p.id !== selectedPageId) e.currentTarget.style.background = 'transparent'; }}
                   >
                     <span className="text-xs shrink-0">{p.emoji}</span>
+                    {p.categoryId && categoryColorMap.has(p.categoryId) && (
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: categoryColorMap.get(p.categoryId) }} />
+                    )}
                     <span className="text-xs truncate flex-1">{p.title}</span>
                     <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>{p.groupEmoji}</span>
                   </div>
@@ -320,6 +330,9 @@ export default function SidePanel({
                     onMouseLeave={(e) => { if (p.id !== selectedPageId) e.currentTarget.style.background = 'transparent'; }}
                   >
                     <span className="text-xs shrink-0">{p.emoji}</span>
+                    {p.categoryId && categoryColorMap.has(p.categoryId) && (
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: categoryColorMap.get(p.categoryId) }} />
+                    )}
                     <span className="text-xs truncate flex-1">{p.title}</span>
                     <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>{p.groupEmoji}</span>
                   </div>
@@ -435,6 +448,9 @@ export default function SidePanel({
                       onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
                     >
                       <span className="text-xs shrink-0">{p.emoji}</span>
+                      {p.categoryId && categoryColorMap.has(p.categoryId) && (
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: categoryColorMap.get(p.categoryId) }} />
+                      )}
                       <span className="text-xs truncate flex-1">{p.title}</span>
                       <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
                         {/* 핀 토글 */}
@@ -471,30 +487,30 @@ export default function SidePanel({
         ))}
       </div>
 
-      {/* 카테고리 관리 섹션 */}
+      {/* 카테고리 관리 버튼 */}
       <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
         <button
-          onClick={() => setCategoryManagerCollapsed(!categoryManagerCollapsed)}
-          className="flex items-center gap-1.5 w-full px-4 py-2 text-[11px] font-medium"
+          onClick={() => setCategoryManagerOpen(true)}
+          className="flex items-center gap-1.5 w-full px-4 py-2.5 text-[11px] font-medium transition-colors cursor-pointer"
           style={{ color: 'var(--text-tertiary)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
-          <svg
-            width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
-            style={{ transform: categoryManagerCollapsed ? 'none' : 'rotate(90deg)', transition: 'transform 0.15s' }}
-          >
-            <polyline points="9 18 15 12 9 6" />
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
           카테고리 관리
         </button>
-        {!categoryManagerCollapsed && (
-          <CategoryManager
-            categories={categories}
-            onCreate={onCreateCategory}
-            onRename={onRenameCategory}
-            onDelete={onDeleteCategory}
-          />
-        )}
       </div>
+
+      <CategoryManager
+        categories={categories}
+        open={categoryManagerOpen}
+        onClose={() => setCategoryManagerOpen(false)}
+        onCreate={onCreateCategory}
+        onRename={onRenameCategory}
+        onDelete={onDeleteCategory}
+      />
 
       {/* 하단 검색 힌트 */}
       <div className="px-4 py-2 text-center" style={{ borderTop: '1px solid var(--border-subtle)' }}>
