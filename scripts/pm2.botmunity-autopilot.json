@@ -1,0 +1,17 @@
+{
+  "apps": [
+    {
+      "name": "botmunity-autopilot",
+      "script": "npx",
+      "args": "tsx scripts/botmunity-autopilot.ts",
+      "cwd": "/Users/vimo/arc-v2",
+      "autorestart": true,
+      "max_restarts": 10,
+      "restart_delay": 10000,
+      "watch": false,
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  ]
+}
