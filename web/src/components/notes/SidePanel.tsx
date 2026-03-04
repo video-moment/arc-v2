@@ -188,11 +188,11 @@ export default function SidePanel({
   return (
     <div
       className="flex flex-col h-full"
-      style={{ width: 280, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)' }}
+      style={{ width: 320, borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-secondary)' }}
     >
       {/* 헤더 */}
-      <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-        <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>노트</span>
+      <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        <span className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>노트</span>
         <button
           onClick={() => setCreatingGroup(true)}
           className="w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer"
@@ -208,12 +208,12 @@ export default function SidePanel({
       {/* 카테고리 필터 바 */}
       {categories.length > 0 && (
         <div
-          className="flex items-center gap-1 px-3 py-2 overflow-x-auto"
+          className="flex items-center gap-1.5 px-4 py-2.5 overflow-x-auto"
           style={{ borderBottom: '1px solid var(--border-subtle)', scrollbarWidth: 'none' }}
         >
           <button
             onClick={() => onSelectCategory(null)}
-            className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors"
+            className="shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
             style={{
               background: selectedCategoryId === null ? 'var(--accent-soft)' : 'var(--bg-hover)',
               color: selectedCategoryId === null ? 'var(--accent-hover)' : 'var(--text-tertiary)',
@@ -225,20 +225,20 @@ export default function SidePanel({
             <button
               key={cat.id}
               onClick={() => onSelectCategory(cat.id === selectedCategoryId ? null : cat.id)}
-              className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors"
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
               style={{
                 background: selectedCategoryId === cat.id ? 'var(--accent-soft)' : 'var(--bg-hover)',
                 color: selectedCategoryId === cat.id ? 'var(--accent-hover)' : 'var(--text-tertiary)',
               }}
             >
-              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cat.color }} />
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: cat.color }} />
               {cat.name}
             </button>
           ))}
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto py-2 px-2">
+      <div className="flex-1 overflow-y-auto py-2 px-3">
         {/* 인라인 그룹 생성 */}
         {creatingGroup && (
           <div className="flex items-center gap-1.5 px-2 py-1.5 mb-1">
@@ -261,7 +261,7 @@ export default function SidePanel({
           <div className="mb-2">
             <button
               onClick={() => setPinnedCollapsed(!pinnedCollapsed)}
-              className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium w-full text-left"
+              className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium w-full text-left"
               style={{ color: 'var(--text-tertiary)' }}
             >
               <svg
@@ -277,7 +277,7 @@ export default function SidePanel({
                 {pinnedPages.map(p => (
                   <div
                     key={'pin-' + p.id}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-colors"
+                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors"
                     style={{
                       background: p.id === selectedPageId ? 'var(--accent-soft)' : 'transparent',
                       color: p.id === selectedPageId ? 'var(--accent-hover)' : 'var(--text-tertiary)',
@@ -286,11 +286,11 @@ export default function SidePanel({
                     onMouseEnter={(e) => { if (p.id !== selectedPageId) e.currentTarget.style.background = 'var(--bg-hover)'; }}
                     onMouseLeave={(e) => { if (p.id !== selectedPageId) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <span className="text-xs shrink-0">{p.emoji}</span>
+                    <span className="text-sm shrink-0">{p.emoji}</span>
                     {p.categoryId && categoryColorMap.has(p.categoryId) && (
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: categoryColorMap.get(p.categoryId) }} />
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: categoryColorMap.get(p.categoryId) }} />
                     )}
-                    <span className="text-xs truncate flex-1">{p.title}</span>
+                    <span className="text-sm truncate flex-1">{p.title}</span>
                     <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>{p.groupEmoji}</span>
                   </div>
                 ))}
@@ -304,7 +304,7 @@ export default function SidePanel({
           <div className="mb-2">
             <button
               onClick={() => setRecentCollapsed(!recentCollapsed)}
-              className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium w-full text-left"
+              className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium w-full text-left"
               style={{ color: 'var(--text-tertiary)' }}
             >
               <svg
@@ -320,7 +320,7 @@ export default function SidePanel({
                 {recentPages.map(p => (
                   <div
                     key={'recent-' + p.id}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-colors"
+                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors"
                     style={{
                       background: p.id === selectedPageId ? 'var(--accent-soft)' : 'transparent',
                       color: p.id === selectedPageId ? 'var(--accent-hover)' : 'var(--text-tertiary)',
@@ -329,11 +329,11 @@ export default function SidePanel({
                     onMouseEnter={(e) => { if (p.id !== selectedPageId) e.currentTarget.style.background = 'var(--bg-hover)'; }}
                     onMouseLeave={(e) => { if (p.id !== selectedPageId) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <span className="text-xs shrink-0">{p.emoji}</span>
+                    <span className="text-sm shrink-0">{p.emoji}</span>
                     {p.categoryId && categoryColorMap.has(p.categoryId) && (
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: categoryColorMap.get(p.categoryId) }} />
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: categoryColorMap.get(p.categoryId) }} />
                     )}
-                    <span className="text-xs truncate flex-1">{p.title}</span>
+                    <span className="text-sm truncate flex-1">{p.title}</span>
                     <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>{p.groupEmoji}</span>
                   </div>
                 ))}
@@ -361,7 +361,7 @@ export default function SidePanel({
           >
             {/* 그룹 헤더 */}
             <div
-              className="group flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer transition-colors"
+              className="group flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition-colors"
               style={{ color: 'var(--text-secondary)' }}
               draggable
               onDragStart={(e) => handleDragStartGroup(e, g.id)}
@@ -393,7 +393,7 @@ export default function SidePanel({
                 />
               ) : (
                 <span
-                  className="flex-1 text-xs font-medium truncate"
+                  className="flex-1 text-sm font-medium truncate"
                   onDoubleClick={() => { setEditingGroupId(g.id); setEditName(g.name); }}
                 >
                   {g.name}
@@ -447,11 +447,11 @@ export default function SidePanel({
                       onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'var(--bg-hover)'; }}
                       onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
                     >
-                      <span className="text-xs shrink-0">{p.emoji}</span>
+                      <span className="text-sm shrink-0">{p.emoji}</span>
                       {p.categoryId && categoryColorMap.has(p.categoryId) && (
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: categoryColorMap.get(p.categoryId) }} />
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: categoryColorMap.get(p.categoryId) }} />
                       )}
-                      <span className="text-xs truncate flex-1">{p.title}</span>
+                      <span className="text-sm truncate flex-1">{p.title}</span>
                       <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
                         {/* 핀 토글 */}
                         <button
@@ -491,12 +491,12 @@ export default function SidePanel({
       <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
         <button
           onClick={() => setCategoryManagerOpen(true)}
-          className="flex items-center gap-1.5 w-full px-4 py-2.5 text-[11px] font-medium transition-colors cursor-pointer"
+          className="flex items-center gap-2 w-full px-5 py-3 text-sm font-medium transition-colors cursor-pointer"
           style={{ color: 'var(--text-tertiary)' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
         >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
           카테고리 관리
