@@ -106,48 +106,58 @@ export default function NoteEditor({
         />
       </div>
 
-      {/* 제목 바 */}
-      <div className="flex items-center gap-3 px-8 py-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-        <span className="text-xl">{page.emoji}</span>
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={handleTitleBlur}
-          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-          className="flex-1 text-lg font-semibold bg-transparent outline-none"
-          style={{ color: 'var(--text-primary)' }}
-          placeholder="제목 없음"
-        />
-        <div className="flex items-center gap-2 shrink-0">
+      {/* 제목 + 메타 바 */}
+      <div className="px-10 pt-5 pb-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        {/* 제목 행 */}
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-3xl">{page.emoji}</span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={handleTitleBlur}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            className="flex-1 text-2xl font-bold bg-transparent outline-none"
+            style={{ color: 'var(--text-primary)' }}
+            placeholder="제목 없음"
+          />
+        </div>
+        {/* 메타 행: 카테고리 + 저장 상태 + 편집/미리보기 */}
+        <div className="flex items-center gap-3">
           {/* 카테고리 선택 */}
           {categories.length > 0 && (
-            <div className="flex items-center gap-1">
-              {page.categoryId && (
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ background: categories.find(c => c.id === page.categoryId)?.color ?? '#6b7280' }}
-                />
-              )}
+            <div className="relative flex items-center">
+              <span
+                className="absolute left-2.5 w-2.5 h-2.5 rounded-full pointer-events-none"
+                style={{ background: page.categoryId ? (categories.find(c => c.id === page.categoryId)?.color ?? '#6b7280') : 'var(--text-tertiary)' }}
+              />
               <select
                 value={page.categoryId ?? ''}
                 onChange={(e) => onCategoryChange(e.target.value || null)}
-                className="text-[11px] bg-transparent outline-none cursor-pointer"
-                style={{ color: 'var(--text-tertiary)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '1px 4px' }}
+                className="pl-7 pr-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer outline-none appearance-none"
+                style={{
+                  background: page.categoryId ? 'var(--accent-soft)' : 'var(--bg-hover)',
+                  color: page.categoryId ? 'var(--accent-hover)' : 'var(--text-tertiary)',
+                  border: '1px solid var(--border-subtle)',
+                }}
               >
-                <option value="">카테고리 없음</option>
+                <option value="">카테고리 선택</option>
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
+              <svg className="absolute right-2 w-3 h-3 pointer-events-none" style={{ color: 'var(--text-tertiary)' }} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 5l3 3 3-3" />
+              </svg>
             </div>
           )}
-          <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
             {saving ? '저장 중...' : lastSaved ? `저장됨 ${lastSaved.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : ''}
           </span>
-          <div className="flex rounded-md overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+          <div className="flex-1" />
+          <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
             <button
               onClick={() => setMode('edit')}
-              className="px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer"
+              className="px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer"
               style={{
                 background: mode === 'edit' ? 'var(--accent-soft)' : 'transparent',
                 color: mode === 'edit' ? 'var(--accent-hover)' : 'var(--text-tertiary)',
@@ -157,7 +167,7 @@ export default function NoteEditor({
             </button>
             <button
               onClick={() => setMode('preview')}
-              className="px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer"
+              className="px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer"
               style={{
                 background: mode === 'preview' ? 'var(--accent-soft)' : 'transparent',
                 color: mode === 'preview' ? 'var(--accent-hover)' : 'var(--text-tertiary)',
@@ -176,13 +186,13 @@ export default function NoteEditor({
             ref={textareaRef}
             value={content}
             onChange={(e) => handleContentChange(e.target.value)}
-            className="w-full h-full resize-none bg-transparent outline-none px-8 py-6 text-sm leading-relaxed font-mono"
+            className="w-full h-full resize-none bg-transparent outline-none px-10 py-8 text-[15px] leading-[1.8] font-mono"
             style={{ color: 'var(--text-primary)', minHeight: '100%' }}
             placeholder="마크다운으로 작성하세요... (# 제목, ## 소제목, - 목록, > 인용, [[페이지명]] 위키 링크)"
           />
         ) : (
           <div
-            className="note-markdown px-8 py-6 cursor-text min-h-full"
+            className="note-markdown px-10 py-8 cursor-text min-h-full"
             onClick={() => setMode('edit')}
           >
             {content ? (
@@ -192,7 +202,7 @@ export default function NoteEditor({
                   h1: ({ children }) => <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.75rem', lineHeight: 1.3 }}>{children}</h1>,
                   h2: ({ children }) => <h2 style={{ fontSize: '1.35rem', fontWeight: 600, color: 'var(--text-primary)', margin: '1.5rem 0 0.5rem', lineHeight: 1.3 }}>{children}</h2>,
                   h3: ({ children }) => <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', margin: '1.25rem 0 0.4rem', lineHeight: 1.4 }}>{children}</h3>,
-                  p: ({ children }) => <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: '0 0 0.75rem', lineHeight: 1.7 }}>{children}</p>,
+                  p: ({ children }) => <p style={{ fontSize: '0.938rem', color: 'var(--text-primary)', margin: '0 0 0.85rem', lineHeight: 1.8 }}>{children}</p>,
                   ul: ({ children }) => <ul style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: '0 0 0.75rem', paddingLeft: '1.5rem', listStyleType: 'disc', lineHeight: 1.7 }}>{children}</ul>,
                   ol: ({ children }) => <ol style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: '0 0 0.75rem', paddingLeft: '1.5rem', listStyleType: 'decimal', lineHeight: 1.7 }}>{children}</ol>,
                   li: ({ children }) => <li style={{ margin: '0.15rem 0' }}>{children}</li>,
