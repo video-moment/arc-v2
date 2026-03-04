@@ -576,6 +576,15 @@ export async function deleteSquad(id: string): Promise<{ deleted: boolean }> {
 
 // ── Notes ──
 
+export interface NoteCategory {
+  id: string;
+  name: string;
+  color: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface NoteGroup {
   id: string;
   name: string;
@@ -588,6 +597,8 @@ export interface NoteGroup {
 export interface NotePage {
   id: string;
   groupId: string;
+  categoryId?: string;
+  category?: NoteCategory;
   title: string;
   emoji: string;
   content: string;
@@ -595,6 +606,17 @@ export interface NotePage {
   isPinned: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+function toNoteCategory(row: any): NoteCategory {
+  return {
+    id: row.id,
+    name: row.name,
+    color: row.color || '#6366f1',
+    sortOrder: row.sort_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 function toNoteGroup(row: any): NoteGroup {
@@ -612,6 +634,8 @@ function toNotePage(row: any): NotePage {
   return {
     id: row.id,
     groupId: row.group_id,
+    categoryId: row.category_id ?? undefined,
+    category: row.note_categories ? toNoteCategory(row.note_categories) : undefined,
     title: row.title,
     emoji: row.emoji || '📝',
     content: row.content || '',
@@ -620,6 +644,45 @@ function toNotePage(row: any): NotePage {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+export async function getNoteCategories(): Promise<NoteCategory[]> {
+  const { data, error } = await supabase
+    .from('note_categories')
+    .select('*')
+    .order('sort_order');
+  if (error) throw error;
+  return (data || []).map(toNoteCategory);
+}
+
+export async function createNoteCategory(name: string, color = '#6366f1'): Promise<NoteCategory> {
+  const { data, error } = await supabase
+    .from('note_categories')
+    .insert({ name, color })
+    .select()
+    .single();
+  if (error) throw error;
+  return toNoteCategory(data);
+}
+
+export async function updateNoteCategory(id: string, updates: Partial<Pick<NoteCategory, 'name' | 'color' | 'sortOrder'>>): Promise<NoteCategory> {
+  const dbUpdates: Record<string, any> = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.color !== undefined) dbUpdates.color = updates.color;
+  if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+  const { data, error } = await supabase
+    .from('note_categories')
+    .update(dbUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toNoteCategory(data);
+}
+
+export async function deleteNoteCategory(id: string): Promise<void> {
+  const { error } = await supabase.from('note_categories').delete().eq('id', id);
+  if (error) throw error;
 }
 
 export async function getNoteGroups(): Promise<NoteGroup[]> {
@@ -662,7 +725,7 @@ export async function deleteNoteGroup(id: string): Promise<void> {
 }
 
 export async function getNotePages(groupId?: string): Promise<NotePage[]> {
-  let query = supabase.from('note_pages').select('*').order('sort_order');
+  let query = supabase.from('note_pages').select('*, note_categories(*)').order('sort_order');
   if (groupId) query = query.eq('group_id', groupId);
   const { data, error } = await query;
   if (error) throw error;
@@ -679,18 +742,19 @@ export async function createNotePage(groupId: string, title: string, emoji = '�
   return toNotePage(data);
 }
 
-export async function updateNotePage(id: string, updates: Partial<Pick<NotePage, 'title' | 'emoji' | 'content' | 'sortOrder' | 'isPinned'>>): Promise<NotePage> {
+export async function updateNotePage(id: string, updates: Partial<Pick<NotePage, 'title' | 'emoji' | 'content' | 'sortOrder' | 'isPinned' | 'categoryId'>>): Promise<NotePage> {
   const dbUpdates: Record<string, any> = {};
   if (updates.title !== undefined) dbUpdates.title = updates.title;
   if (updates.emoji !== undefined) dbUpdates.emoji = updates.emoji;
   if (updates.content !== undefined) dbUpdates.content = updates.content;
   if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
   if (updates.isPinned !== undefined) dbUpdates.is_pinned = updates.isPinned;
+  if ('categoryId' in updates) dbUpdates.category_id = updates.categoryId ?? null;
   const { data, error } = await supabase
     .from('note_pages')
     .update(dbUpdates)
     .eq('id', id)
-    .select()
+    .select('*, note_categories(*)')
     .single();
   if (error) throw error;
   return toNotePage(data);
@@ -795,6 +859,15 @@ export interface InsightAdoption {
   createdAt: string;
 }
 
+export interface InsightComment {
+  id: string;
+  insightId: string;
+  agentId: string;
+  agentName?: string;
+  content: string;
+  createdAt: string;
+}
+
 export interface CommunityDirective {
   id: string;
   source: string;
@@ -849,6 +922,39 @@ export async function getCommunityInsights(options?: { category?: string; limit?
   const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(toCommunityInsight);
+}
+
+export async function getInsightComments(insightId: string): Promise<InsightComment[]> {
+  const { data, error } = await supabase
+    .from('insight_comments')
+    .select('*, agents(name)')
+    .eq('insight_id', insightId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    insightId: row.insight_id,
+    agentId: row.agent_id,
+    agentName: row.agents?.name,
+    content: row.content,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function getInsightCommentCounts(insightIds: string[]): Promise<Record<string, number>> {
+  if (insightIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from('insight_comments')
+    .select('insight_id')
+    .in('insight_id', insightIds);
+
+  if (error) throw error;
+  const counts: Record<string, number> = {};
+  (data || []).forEach((row: any) => {
+    counts[row.insight_id] = (counts[row.insight_id] || 0) + 1;
+  });
+  return counts;
 }
 
 export async function getCommunityDirectives(activeOnly = true): Promise<CommunityDirective[]> {

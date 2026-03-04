@@ -10,9 +10,15 @@ import {
   createNotePage,
   updateNotePage,
   deleteNotePage,
+  getNoteCategories,
+  createNoteCategory,
+  updateNoteCategory,
+  deleteNoteCategory,
   type NoteGroup,
+  type NoteCategory,
   type NotePage,
 } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import SidePanel from '@/components/notes/SidePanel';
 import NoteEditor from '@/components/notes/NoteEditor';
 import EmptyState from '@/components/notes/EmptyState';
@@ -25,6 +31,8 @@ interface GroupWithPages extends NoteGroup {
 
 export default function NotesPage() {
   const [groups, setGroups] = useState<GroupWithPages[]>([]);
+  const [categories, setCategories] = useState<NoteCategory[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedPage, setSelectedPage] = useState<NotePage | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -34,7 +42,7 @@ export default function NotesPage() {
   const loadData = useCallback(async () => {
     setLoadError(false);
     try {
-      const [gs, ps] = await Promise.all([getNoteGroups(), getNotePages()]);
+      const [gs, ps, cats] = await Promise.all([getNoteGroups(), getNotePages(), getNoteCategories()]);
       const grouped: GroupWithPages[] = gs.map((g) => ({
         ...g,
         pages: ps.filter((p) => p.groupId === g.id),
@@ -44,6 +52,7 @@ export default function NotesPage() {
         const expandedMap = new Map(prev.map((g) => [g.id, g.expanded]));
         return grouped.map((g) => ({ ...g, expanded: expandedMap.get(g.id) ?? true }));
       });
+      setCategories(cats);
     } catch (e) {
       console.error('노트 로드 실패:', e);
     } finally {
@@ -52,6 +61,17 @@ export default function NotesPage() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // ── Supabase Realtime 구독 — 외부 변경 시 자동 반영 ──
+  useEffect(() => {
+    const channel = supabase
+      .channel('notes-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'note_groups' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'note_pages' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'note_categories' }, () => loadData())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [loadData]);
 
   useEffect(() => {
     if (!loading) return;
@@ -140,6 +160,30 @@ export default function NotesPage() {
     loadData();
   };
 
+  // ── Category CRUD ──
+  const handleCreateCategory = async (name: string, color: string) => {
+    await createNoteCategory(name, color);
+    loadData();
+  };
+
+  const handleRenameCategory = async (id: string, name: string) => {
+    await updateNoteCategory(id, { name });
+    loadData();
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    await deleteNoteCategory(id);
+    if (selectedCategoryId === id) setSelectedCategoryId(null);
+    loadData();
+  };
+
+  const handleCategoryChange = async (categoryId: string | null) => {
+    if (!selectedPage) return;
+    await updateNotePage(selectedPage.id, { categoryId: categoryId ?? undefined });
+    setSelectedPage((prev) => prev ? { ...prev, categoryId: categoryId ?? undefined } : null);
+    loadData();
+  };
+
   // ── Wiki link navigation ──
   const handleNavigateToPage = (pageId: string) => {
     for (const g of groups) {
@@ -158,6 +202,15 @@ export default function NotesPage() {
   const allPages = useMemo(() => {
     return groups.flatMap(g => g.pages.map(p => ({ id: p.id, title: p.title })));
   }, [groups]);
+
+  // 카테고리 필터링이 적용된 그룹 목록
+  const filteredGroups = useMemo(() => {
+    if (!selectedCategoryId) return groups;
+    return groups.map((g) => ({
+      ...g,
+      pages: g.pages.filter((p) => p.categoryId === selectedCategoryId),
+    }));
+  }, [groups, selectedCategoryId]);
 
   // Find group info for selected page
   const selectedGroup = selectedPage
@@ -196,7 +249,7 @@ export default function NotesPage() {
   return (
     <div className="flex -m-8" style={{ background: 'var(--bg-primary)', height: 'calc(100vh)' }}>
       <SidePanel
-        groups={groups}
+        groups={filteredGroups}
         selectedPageId={selectedPage?.id ?? null}
         onSelectPage={handleSelectPage}
         onCreateGroup={handleCreateGroup}
@@ -208,6 +261,12 @@ export default function NotesPage() {
         onTogglePin={handleTogglePin}
         onReorderGroups={handleReorderGroups}
         onReorderPages={handleReorderPages}
+        categories={categories}
+        selectedCategoryId={selectedCategoryId}
+        onSelectCategory={setSelectedCategoryId}
+        onCreateCategory={handleCreateCategory}
+        onRenameCategory={handleRenameCategory}
+        onDeleteCategory={handleDeleteCategory}
       />
       <div className="flex-1 min-w-0">
         {selectedPage ? (
@@ -217,9 +276,11 @@ export default function NotesPage() {
             groupName={selectedGroup?.name ?? ''}
             groupEmoji={selectedGroup?.emoji ?? '📁'}
             allPages={allPages}
+            categories={categories}
             onSave={handleSaveContent}
             onTitleChange={handleTitleChange}
             onNavigateToPage={handleNavigateToPage}
+            onCategoryChange={handleCategoryChange}
           />
         ) : (
           <EmptyState />

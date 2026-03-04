@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { NotePage } from '@/lib/api';
+import type { NoteCategory, NotePage } from '@/lib/api';
 import Breadcrumb from './Breadcrumb';
 import PageMetaFooter from './PageMetaFooter';
 
@@ -12,9 +12,11 @@ interface NoteEditorProps {
   groupName: string;
   groupEmoji: string;
   allPages: { id: string; title: string }[];
+  categories: NoteCategory[];
   onSave: (content: string) => void;
   onTitleChange: (title: string) => void;
   onNavigateToPage: (pageId: string) => void;
+  onCategoryChange: (categoryId: string | null) => void;
 }
 
 export default function NoteEditor({
@@ -22,9 +24,11 @@ export default function NoteEditor({
   groupName,
   groupEmoji,
   allPages,
+  categories,
   onSave,
   onTitleChange,
   onNavigateToPage,
+  onCategoryChange,
 }: NoteEditorProps) {
   const [content, setContent] = useState(page.content);
   const [title, setTitle] = useState(page.title);
@@ -115,6 +119,28 @@ export default function NoteEditor({
           placeholder="제목 없음"
         />
         <div className="flex items-center gap-2 shrink-0">
+          {/* 카테고리 선택 */}
+          {categories.length > 0 && (
+            <div className="flex items-center gap-1">
+              {page.categoryId && (
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ background: categories.find(c => c.id === page.categoryId)?.color ?? '#6b7280' }}
+                />
+              )}
+              <select
+                value={page.categoryId ?? ''}
+                onChange={(e) => onCategoryChange(e.target.value || null)}
+                className="text-[11px] bg-transparent outline-none cursor-pointer"
+                style={{ color: 'var(--text-tertiary)', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '1px 4px' }}
+              >
+                <option value="">카테고리 없음</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
             {saving ? '저장 중...' : lastSaved ? `저장됨 ${lastSaved.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}` : ''}
           </span>

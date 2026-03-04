@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import type { NotePage } from '@/lib/api';
+import type { NoteCategory, NotePage } from '@/lib/api';
+import CategoryManager from './CategoryManager';
 
 interface GroupWithPages {
   id: string;
@@ -25,6 +26,13 @@ interface SidePanelProps {
   onTogglePin: (page: NotePage) => void;
   onReorderGroups: (groupId: string, newSortOrder: number) => void;
   onReorderPages: (pageId: string, newSortOrder: number) => void;
+  // Category props
+  categories: NoteCategory[];
+  selectedCategoryId: string | null;
+  onSelectCategory: (id: string | null) => void;
+  onCreateCategory: (name: string, color: string) => void;
+  onRenameCategory: (id: string, name: string) => void;
+  onDeleteCategory: (id: string) => void;
 }
 
 export default function SidePanel({
@@ -40,6 +48,12 @@ export default function SidePanel({
   onTogglePin,
   onReorderGroups,
   onReorderPages,
+  categories,
+  selectedCategoryId,
+  onSelectCategory,
+  onCreateCategory,
+  onRenameCategory,
+  onDeleteCategory,
 }: SidePanelProps) {
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -47,6 +61,7 @@ export default function SidePanel({
   const [newGroupName, setNewGroupName] = useState('');
   const [recentCollapsed, setRecentCollapsed] = useState(false);
   const [pinnedCollapsed, setPinnedCollapsed] = useState(false);
+  const [categoryManagerCollapsed, setCategoryManagerCollapsed] = useState(false);
   const editRef = useRef<HTMLInputElement>(null);
   const createRef = useRef<HTMLInputElement>(null);
 
@@ -182,6 +197,39 @@ export default function SidePanel({
           </svg>
         </button>
       </div>
+
+      {/* 카테고리 필터 바 */}
+      {categories.length > 0 && (
+        <div
+          className="flex items-center gap-1 px-3 py-2 overflow-x-auto"
+          style={{ borderBottom: '1px solid var(--border-subtle)', scrollbarWidth: 'none' }}
+        >
+          <button
+            onClick={() => onSelectCategory(null)}
+            className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors"
+            style={{
+              background: selectedCategoryId === null ? 'var(--accent-soft)' : 'var(--bg-hover)',
+              color: selectedCategoryId === null ? 'var(--accent-hover)' : 'var(--text-tertiary)',
+            }}
+          >
+            전체
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => onSelectCategory(cat.id === selectedCategoryId ? null : cat.id)}
+              className="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors"
+              style={{
+                background: selectedCategoryId === cat.id ? 'var(--accent-soft)' : 'var(--bg-hover)',
+                color: selectedCategoryId === cat.id ? 'var(--accent-hover)' : 'var(--text-tertiary)',
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cat.color }} />
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto py-2 px-2">
         {/* 인라인 그룹 생성 */}
@@ -421,6 +469,31 @@ export default function SidePanel({
             )}
           </div>
         ))}
+      </div>
+
+      {/* 카테고리 관리 섹션 */}
+      <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <button
+          onClick={() => setCategoryManagerCollapsed(!categoryManagerCollapsed)}
+          className="flex items-center gap-1.5 w-full px-4 py-2 text-[11px] font-medium"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          <svg
+            width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+            style={{ transform: categoryManagerCollapsed ? 'none' : 'rotate(90deg)', transition: 'transform 0.15s' }}
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          카테고리 관리
+        </button>
+        {!categoryManagerCollapsed && (
+          <CategoryManager
+            categories={categories}
+            onCreate={onCreateCategory}
+            onRename={onRenameCategory}
+            onDelete={onDeleteCategory}
+          />
+        )}
       </div>
 
       {/* 하단 검색 힌트 */}
