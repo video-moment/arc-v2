@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   getNoteGroups,
   createNoteGroup,
@@ -19,9 +19,10 @@ import {
   type NotePage,
 } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
+import { useSidebar } from '@/components/SidebarContext';
 import SidePanel from '@/components/notes/SidePanel';
 import NoteEditor from '@/components/notes/NoteEditor';
-import EmptyState from '@/components/notes/EmptyState';
+import NoteDashboard from '@/components/notes/NoteDashboard';
 import QuickSwitcher from '@/components/notes/QuickSwitcher';
 
 interface GroupWithPages extends NoteGroup {
@@ -37,6 +38,18 @@ export default function NotesPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
+
+  // ── 노트 진입 시 글로벌 사이드바 자동 접기, 나갈 때 복원 ──
+  const { collapsed, collapse, expand } = useSidebar();
+  const wasCollapsedRef = useRef(collapsed);
+  useEffect(() => {
+    wasCollapsedRef.current = collapsed;
+    collapse();
+    return () => {
+      if (!wasCollapsedRef.current) expand();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Data loading ──
   const loadData = useCallback(async () => {
@@ -283,7 +296,11 @@ export default function NotesPage() {
             onCategoryChange={handleCategoryChange}
           />
         ) : (
-          <EmptyState />
+          <NoteDashboard
+            groups={groups}
+            categories={categories}
+            onSelectPage={handleSelectPage}
+          />
         )}
       </div>
 
