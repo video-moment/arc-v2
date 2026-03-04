@@ -223,60 +223,74 @@ export default function NoteDashboard({ groups, categories, onSelectPage }: Note
           </div>
         </div>
 
-        {/* 카테고리 분포 바 */}
+        {/* 카테고리 블록 */}
         {categories.length > 0 && (
           <div className="mb-8">
-            <div className="flex items-center gap-2 mb-3">
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>카테고리 분포</h2>
-            </div>
-            <div className="flex rounded-full overflow-hidden h-2 mb-2" style={{ background: 'var(--bg-hover)' }}>
-              {categoryPages.map(cat => (
-                cat.total > 0 && (
-                  <div
-                    key={cat.id}
-                    style={{
-                      width: `${(cat.total / totalPages) * 100}%`,
-                      background: cat.color,
-                      minWidth: '4px',
-                    }}
-                  />
-                )
-              ))}
-              {uncategorizedCount > 0 && (
-                <div
-                  style={{
-                    width: `${(uncategorizedCount / totalPages) * 100}%`,
-                    background: 'var(--text-tertiary)',
-                    opacity: 0.3,
-                    minWidth: '4px',
-                  }}
-                />
-              )}
-            </div>
-            <div className="flex items-center gap-4 flex-wrap">
+            <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>카테고리</h2>
+            <div className="grid grid-cols-2 gap-3">
               {categoryPages.map(cat => (
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCatId(cat.id)}
-                  className="flex items-center gap-1.5 text-xs cursor-pointer transition-colors"
-                  style={{ color: 'var(--text-secondary)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                  className="rounded-xl px-5 py-5 text-left cursor-pointer transition-all"
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = cat.color;
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                    e.currentTarget.style.transform = 'none';
+                  }}
                 >
-                  <span className="w-2 h-2 rounded-full" style={{ background: cat.color }} />
-                  {cat.name} ({cat.total})
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="w-3.5 h-3.5 rounded-full" style={{ background: cat.color }} />
+                    <span className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
+                    <span className="flex-1" />
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-tertiary)' }}>
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                  <p className="text-2xl font-bold mb-1" style={{ color: cat.total > 0 ? cat.color : 'var(--text-tertiary)' }}>
+                    {cat.total}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                    {cat.total > 0 ? `최근: ${cat.pages[0]?.title ?? ''}` : '노트 없음'}
+                  </p>
                 </button>
               ))}
               {uncategorizedCount > 0 && (
                 <button
                   onClick={() => setSelectedCatId('uncategorized')}
-                  className="flex items-center gap-1.5 text-xs cursor-pointer transition-colors"
-                  style={{ color: 'var(--text-tertiary)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+                  className="rounded-xl px-5 py-5 text-left cursor-pointer transition-all"
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--text-tertiary)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                    e.currentTarget.style.transform = 'none';
+                  }}
                 >
-                  <span className="w-2 h-2 rounded-full" style={{ background: 'var(--text-tertiary)', opacity: 0.4 }} />
-                  미분류 ({uncategorizedCount})
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="w-3.5 h-3.5 rounded-full" style={{ background: 'var(--text-tertiary)', opacity: 0.4 }} />
+                    <span className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>미분류</span>
+                    <span className="flex-1" />
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-tertiary)' }}>
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </div>
+                  <p className="text-2xl font-bold mb-1" style={{ color: 'var(--text-tertiary)' }}>
+                    {uncategorizedCount}
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>카테고리 미지정</p>
                 </button>
               )}
             </div>
@@ -344,52 +358,6 @@ export default function NoteDashboard({ groups, categories, onSelectPage }: Note
           </div>
         </div>
 
-        {/* 카테고리별 섹션 */}
-        {categoryPages.filter(c => c.pages.length > 0).length > 0 && (
-          <div>
-            <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>카테고리별</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {categoryPages.filter(c => c.pages.length > 0).map(cat => (
-                <div
-                  key={cat.id}
-                  className="rounded-xl px-5 py-4"
-                  style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}
-                >
-                  <button
-                    onClick={() => setSelectedCatId(cat.id)}
-                    className="flex items-center gap-2 mb-3 w-full cursor-pointer transition-opacity hover:opacity-80"
-                  >
-                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: cat.color }} />
-                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
-                    <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{cat.total}</span>
-                    <span className="flex-1" />
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-tertiary)' }}>
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </button>
-                  <div className="space-y-2">
-                    {cat.pages.map(p => (
-                      <div
-                        key={p.id}
-                        className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition-colors"
-                        style={{ color: 'var(--text-secondary)' }}
-                        onClick={() => onSelectPage(p)}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                      >
-                        <span className="text-sm">{p.emoji}</span>
-                        <span className="text-xs truncate flex-1">{p.title}</span>
-                        <span className="text-[11px] flex-shrink-0" style={{ color: 'var(--text-tertiary)' }}>
-                          {relativeTime(p.updatedAt)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
       </div>
     </div>
