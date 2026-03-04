@@ -35,6 +35,8 @@ export default function NoteEditor({
   const [mode, setMode] = useState<'edit' | 'preview'>('preview');
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [catOpen, setCatOpen] = useState(false);
+  const catRef = useRef<HTMLDivElement>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -71,6 +73,16 @@ export default function NoteEditor({
       onTitleChange(title.trim());
     }
   };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (catRef.current && !catRef.current.contains(e.target as Node)) {
+        setCatOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -123,31 +135,67 @@ export default function NoteEditor({
         </div>
         {/* 메타 행: 카테고리 + 저장 상태 + 편집/미리보기 */}
         <div className="flex items-center gap-3">
-          {/* 카테고리 선택 */}
+          {/* 카테고리 커스텀 드롭다운 */}
           {categories.length > 0 && (
-            <div className="relative flex items-center">
-              <span
-                className="absolute left-2.5 w-2.5 h-2.5 rounded-full pointer-events-none"
-                style={{ background: page.categoryId ? (categories.find(c => c.id === page.categoryId)?.color ?? '#6b7280') : 'var(--text-tertiary)' }}
-              />
-              <select
-                value={page.categoryId ?? ''}
-                onChange={(e) => onCategoryChange(e.target.value || null)}
-                className="pl-7 pr-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer outline-none appearance-none"
+            <div className="relative" ref={catRef}>
+              <button
+                onClick={() => setCatOpen(o => !o)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium cursor-pointer transition-all"
                 style={{
                   background: page.categoryId ? 'var(--accent-soft)' : 'var(--bg-hover)',
                   color: page.categoryId ? 'var(--accent-hover)' : 'var(--text-tertiary)',
-                  border: '1px solid var(--border-subtle)',
+                  border: `1px solid ${catOpen ? 'var(--accent)' : 'var(--border-subtle)'}`,
                 }}
               >
-                <option value="">카테고리 선택</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-              <svg className="absolute right-2 w-3 h-3 pointer-events-none" style={{ color: 'var(--text-tertiary)' }} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 5l3 3 3-3" />
-              </svg>
+                <span
+                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  style={{ background: page.categoryId ? (categories.find(c => c.id === page.categoryId)?.color ?? '#6b7280') : 'var(--text-tertiary)' }}
+                />
+                {page.categoryId ? categories.find(c => c.id === page.categoryId)?.name : '카테고리'}
+                <svg className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--text-tertiary)', transform: catOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 5l3 3 3-3" />
+                </svg>
+              </button>
+              {catOpen && (
+                <div
+                  className="absolute top-full left-0 mt-1.5 min-w-[160px] rounded-xl py-1.5 z-50"
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border)',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  <button
+                    onClick={() => { onCategoryChange(null); setCatOpen(false); }}
+                    className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm transition-colors"
+                    style={{
+                      color: !page.categoryId ? 'var(--accent-hover)' : 'var(--text-secondary)',
+                      background: !page.categoryId ? 'var(--accent-soft)' : 'transparent',
+                    }}
+                    onMouseEnter={(e) => { if (page.categoryId) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                    onMouseLeave={(e) => { if (page.categoryId) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: 'var(--text-tertiary)' }} />
+                    없음
+                  </button>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => { onCategoryChange(cat.id); setCatOpen(false); }}
+                      className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm transition-colors"
+                      style={{
+                        color: page.categoryId === cat.id ? 'var(--accent-hover)' : 'var(--text-secondary)',
+                        background: page.categoryId === cat.id ? 'var(--accent-soft)' : 'transparent',
+                      }}
+                      onMouseEnter={(e) => { if (page.categoryId !== cat.id) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                      onMouseLeave={(e) => { if (page.categoryId !== cat.id) e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: cat.color }} />
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
