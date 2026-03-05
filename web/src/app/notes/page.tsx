@@ -68,6 +68,7 @@ export default function NotesPage() {
       setCategories(cats);
     } catch (e) {
       console.error('노트 로드 실패:', e);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -75,15 +76,23 @@ export default function NotesPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ── Supabase Realtime 구독 — 외부 변경 시 자동 반영 ──
+  // ── Supabase Realtime 구독 — 외부 변경 시 자동 반영 (debounce) ──
+  const realtimeTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
+    const debouncedLoad = () => {
+      if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
+      realtimeTimerRef.current = setTimeout(() => loadData(), 500);
+    };
     const channel = supabase
       .channel('notes-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'note_groups' }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'note_pages' }, () => loadData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'note_categories' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'note_groups' }, debouncedLoad)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'note_pages' }, debouncedLoad)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'note_categories' }, debouncedLoad)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
+      supabase.removeChannel(channel);
+    };
   }, [loadData]);
 
   useEffect(() => {
@@ -179,8 +188,10 @@ export default function NotesPage() {
     loadData();
   };
 
-  const handleRenameCategory = async (id: string, name: string) => {
-    await updateNoteCategory(id, { name });
+  const handleRenameCategory = async (id: string, name: string, color?: string) => {
+    const updates: { name: string; color?: string } = { name };
+    if (color) updates.color = color;
+    await updateNoteCategory(id, updates);
     loadData();
   };
 
@@ -294,6 +305,7 @@ export default function NotesPage() {
             onTitleChange={handleTitleChange}
             onNavigateToPage={handleNavigateToPage}
             onCategoryChange={handleCategoryChange}
+            onGoBack={() => setSelectedPage(null)}
           />
         ) : (
           <NoteDashboard

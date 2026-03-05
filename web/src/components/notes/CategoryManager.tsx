@@ -13,7 +13,7 @@ interface CategoryManagerProps {
   open: boolean;
   onClose: () => void;
   onCreate: (name: string, color: string) => void;
-  onRename: (id: string, name: string) => void;
+  onRename: (id: string, name: string, color?: string) => void;
   onDelete: (id: string) => void;
 }
 
@@ -68,7 +68,7 @@ export default function CategoryManager({
 
   const commitRename = () => {
     if (editingId && editName.trim()) {
-      onRename(editingId, editName.trim());
+      onRename(editingId, editName.trim(), editColor || undefined);
     }
     setEditingId(null);
   };

@@ -31,7 +31,7 @@ interface SidePanelProps {
   selectedCategoryId: string | null;
   onSelectCategory: (id: string | null) => void;
   onCreateCategory: (name: string, color: string) => void;
-  onRenameCategory: (id: string, name: string) => void;
+  onRenameCategory: (id: string, name: string, color?: string) => void;
   onDeleteCategory: (id: string) => void;
 }
 

@@ -19,7 +19,9 @@ interface NoteDashboardProps {
 export default function NoteDashboard({ groups, categories, onSelectPage }: NoteDashboardProps) {
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null); // null = 대시보드, 'uncategorized' = 미분류
 
-  const allPages = useMemo(() => {
+  type PageWithGroup = NotePage & { groupName: string; groupEmoji: string };
+
+  const allPages = useMemo((): PageWithGroup[] => {
     return groups.flatMap(g => g.pages.map(p => ({ ...p, groupName: g.name, groupEmoji: g.emoji })));
   }, [groups]);
 
@@ -179,7 +181,7 @@ export default function NoteDashboard({ groups, categories, onSelectPage }: Note
                   </div>
                   <div className="flex flex-col items-end flex-shrink-0 gap-1">
                     <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                      {(p as any).groupEmoji} {(p as any).groupName}
+                      {p.groupEmoji} {p.groupName}
                     </span>
                     <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
                       {relativeTime(p.updatedAt)}
@@ -227,7 +229,7 @@ export default function NoteDashboard({ groups, categories, onSelectPage }: Note
         {categories.length > 0 && (
           <div className="mb-8">
             <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>카테고리</h2>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {categoryPages.map(cat => (
                 <button
                   key={cat.id}
@@ -336,7 +338,7 @@ export default function NoteDashboard({ groups, categories, onSelectPage }: Note
                           </span>
                         )}
                         <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                          {(p as any).groupEmoji} {(p as any).groupName}
+                          {p.groupEmoji} {p.groupName}
                         </span>
                       </div>
                     </div>

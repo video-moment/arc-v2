@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { NoteCategory, NotePage } from '@/lib/api';
@@ -13,10 +13,11 @@ interface NoteEditorProps {
   groupEmoji: string;
   allPages: { id: string; title: string }[];
   categories: NoteCategory[];
-  onSave: (content: string) => void;
+  onSave: (content: string) => void | Promise<void>;
   onTitleChange: (title: string) => void;
   onNavigateToPage: (pageId: string) => void;
   onCategoryChange: (categoryId: string | null) => void;
+  onGoBack?: () => void;
 }
 
 export default function NoteEditor({
@@ -29,6 +30,7 @@ export default function NoteEditor({
   onTitleChange,
   onNavigateToPage,
   onCategoryChange,
+  onGoBack,
 }: NoteEditorProps) {
   const [content, setContent] = useState(page.content);
   const [title, setTitle] = useState(page.title);
@@ -45,6 +47,10 @@ export default function NoteEditor({
     setTitle(page.title);
     setLastSaved(null);
     setMode(page.content ? 'preview' : 'edit');
+    // 페이지 전환 시 이전 자동저장 타이머 정리
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
   }, [page.id, page.content, page.title]);
 
   useEffect(() => {
@@ -53,13 +59,16 @@ export default function NoteEditor({
 
   const scheduleAutoSave = useCallback((newContent: string) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
+    saveTimerRef.current = setTimeout(async () => {
       setSaving(true);
-      onSave(newContent);
-      setTimeout(() => {
-        setSaving(false);
+      try {
+        await onSave(newContent);
         setLastSaved(new Date());
-      }, 300);
+      } catch (e) {
+        console.error('자동저장 실패:', e);
+      } finally {
+        setSaving(false);
+      }
     }, 1500);
   }, [onSave]);
 
@@ -71,6 +80,12 @@ export default function NoteEditor({
   const handleTitleBlur = () => {
     if (title.trim() && title !== page.title) {
       onTitleChange(title.trim());
+    }
+    // 제목 변경 시 pending content도 즉시 저장
+    if (saveTimerRef.current && content !== page.content) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = undefined;
+      onSave(content);
     }
   };
 
@@ -95,6 +110,13 @@ export default function NoteEditor({
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // 블로그 카테고리 판별
+  const isBlogCategory = useMemo(() => {
+    if (!page.categoryId) return false;
+    const cat = categories.find(c => c.id === page.categoryId);
+    return cat?.name?.includes('블로그') ?? false;
+  }, [page.categoryId, categories]);
+
   // Wiki link preprocessing: [[page name]] → clickable link
   const processWikiLinks = (text: string): string => {
     return text.replace(/\[\[([^\]]+)\]\]/g, (_, name) => {
@@ -115,6 +137,7 @@ export default function NoteEditor({
           groupName={groupName}
           pageEmoji={page.emoji}
           pageTitle={page.title}
+          onClickGroup={onGoBack}
         />
       </div>
 
@@ -240,74 +263,212 @@ export default function NoteEditor({
           />
         ) : (
           <div
-            className="note-markdown px-10 py-8 cursor-text min-h-full"
+            className={isBlogCategory ? 'cursor-text min-h-full px-10 py-8' : 'note-markdown px-10 py-8 cursor-text min-h-full'}
             onClick={() => setMode('edit')}
           >
             {content ? (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  h1: ({ children }) => <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.75rem', lineHeight: 1.3 }}>{children}</h1>,
-                  h2: ({ children }) => <h2 style={{ fontSize: '1.35rem', fontWeight: 600, color: 'var(--text-primary)', margin: '1.5rem 0 0.5rem', lineHeight: 1.3 }}>{children}</h2>,
-                  h3: ({ children }) => <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', margin: '1.25rem 0 0.4rem', lineHeight: 1.4 }}>{children}</h3>,
-                  p: ({ children }) => <p style={{ fontSize: '0.938rem', color: 'var(--text-primary)', margin: '0 0 0.85rem', lineHeight: 1.8 }}>{children}</p>,
-                  ul: ({ children }) => <ul style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: '0 0 0.75rem', paddingLeft: '1.5rem', listStyleType: 'disc', lineHeight: 1.7 }}>{children}</ul>,
-                  ol: ({ children }) => <ol style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: '0 0 0.75rem', paddingLeft: '1.5rem', listStyleType: 'decimal', lineHeight: 1.7 }}>{children}</ol>,
-                  li: ({ children }) => <li style={{ margin: '0.15rem 0' }}>{children}</li>,
-                  blockquote: ({ children }) => (
-                    <blockquote style={{ borderLeft: '3px solid var(--accent)', paddingLeft: '1rem', margin: '0.75rem 0', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                      {children}
-                    </blockquote>
-                  ),
-                  code: ({ children, className }) => {
-                    const isBlock = className?.includes('language-');
-                    if (isBlock) {
-                      return (
-                        <pre style={{ background: 'var(--bg-input)', borderRadius: 8, padding: '0.75rem 1rem', margin: '0.75rem 0', overflowX: 'auto', border: '1px solid var(--border-subtle)' }}>
-                          <code style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontFamily: 'monospace' }}>{children}</code>
-                        </pre>
-                      );
-                    }
-                    return <code style={{ background: 'var(--bg-hover)', padding: '0.15rem 0.4rem', borderRadius: 4, fontSize: '0.8rem', color: 'var(--accent-hover)', fontFamily: 'monospace' }}>{children}</code>;
-                  },
-                  pre: ({ children }) => <>{children}</>,
-                  hr: () => <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '1.5rem 0' }} />,
-                  a: ({ href, children }) => {
-                    // Wiki link interception
-                    if (href?.startsWith('wiki://')) {
-                      const pageId = href.replace('wiki://', '');
-                      return (
-                        <a
-                          href="#"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onNavigateToPage(pageId); }}
-                          style={{ color: 'var(--accent-hover)', textDecoration: 'underline', cursor: 'pointer' }}
-                        >
+              isBlogCategory ? (
+                /* ── 네이버 블로그 스타일 프리뷰 ── */
+                <div style={{
+                  maxWidth: 720, margin: '0 auto', padding: '48px 32px 64px',
+                  background: '#fff', borderRadius: 12,
+                  border: '1px solid var(--border-subtle)',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+                }}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      h1: ({ children }) => (
+                        <h1 style={{
+                          fontSize: '1.75rem', fontWeight: 800, color: '#333',
+                          margin: '0 0 1.25rem', lineHeight: 1.5, letterSpacing: '-0.02em',
+                          paddingBottom: '0.75rem', borderBottom: '2px solid #00c73c',
+                        }}>{children}</h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 style={{
+                          fontSize: '1.375rem', fontWeight: 700, color: '#333',
+                          margin: '2.5rem 0 0.75rem', lineHeight: 1.5, letterSpacing: '-0.01em',
+                          paddingLeft: '0.75rem', borderLeft: '4px solid #00c73c',
+                        }}>{children}</h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 style={{
+                          fontSize: '1.125rem', fontWeight: 700, color: '#444',
+                          margin: '2rem 0 0.5rem', lineHeight: 1.5,
+                        }}>{children}</h3>
+                      ),
+                      p: ({ children }) => (
+                        <p style={{
+                          fontSize: '1rem', color: '#333', margin: '0 0 1.5rem',
+                          lineHeight: 2, wordBreak: 'keep-all', letterSpacing: '-0.01em',
+                        }}>{children}</p>
+                      ),
+                      ul: ({ children }) => (
+                        <ul style={{
+                          fontSize: '1rem', color: '#333', margin: '0.5rem 0 1.5rem',
+                          paddingLeft: '1.25rem', listStyleType: 'disc', lineHeight: 2,
+                        }}>{children}</ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol style={{
+                          fontSize: '1rem', color: '#333', margin: '0.5rem 0 1.5rem',
+                          paddingLeft: '1.25rem', listStyleType: 'decimal', lineHeight: 2,
+                        }}>{children}</ol>
+                      ),
+                      li: ({ children }) => <li style={{ margin: '0.35rem 0' }}>{children}</li>,
+                      blockquote: ({ children }) => (
+                        <blockquote style={{
+                          background: '#f8f9fa', borderLeft: '4px solid #00c73c',
+                          padding: '1rem 1.25rem', margin: '1.5rem 0', borderRadius: '0 8px 8px 0',
+                          color: '#555', fontStyle: 'normal', lineHeight: 1.9,
+                        }}>
                           {children}
-                        </a>
-                      );
-                    }
-                    return <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-hover)', textDecoration: 'underline' }}>{children}</a>;
-                  },
-                  del: ({ children }) => <del style={{ color: 'var(--text-tertiary)', textDecoration: 'line-through' }}>{children}</del>,
-                  strong: ({ children }) => <strong style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{children}</strong>,
-                  em: ({ children }) => <em style={{ fontStyle: 'italic', color: 'var(--text-secondary)' }}>{children}</em>,
-                  table: ({ children }) => (
-                    <div style={{ overflowX: 'auto', margin: '0.75rem 0' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>{children}</table>
-                    </div>
-                  ),
-                  th: ({ children }) => <th style={{ textAlign: 'left', padding: '0.5rem 0.75rem', borderBottom: '2px solid var(--border)', fontWeight: 600, color: 'var(--text-primary)' }}>{children}</th>,
-                  td: ({ children }) => <td style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>{children}</td>,
-                  input: ({ checked, ...props }) => (
-                    <input type="checkbox" checked={checked} readOnly style={{ marginRight: 6, accentColor: 'var(--accent)' }} {...props} />
-                  ),
-                }}
-              >
-                {processWikiLinks(content)}
-              </ReactMarkdown>
+                        </blockquote>
+                      ),
+                      code: ({ children, className }) => {
+                        const isBlock = className?.includes('language-');
+                        if (isBlock) {
+                          return (
+                            <pre style={{
+                              background: '#f5f6f7', borderRadius: 8,
+                              padding: '1rem 1.25rem', margin: '1.5rem 0',
+                              overflowX: 'auto', border: '1px solid #e5e8eb',
+                            }}>
+                              <code style={{ fontSize: '0.875rem', color: '#333', fontFamily: '"D2Coding", monospace', lineHeight: 1.7 }}>{children}</code>
+                            </pre>
+                          );
+                        }
+                        return (
+                          <code style={{
+                            background: '#e8f5e9', padding: '0.2rem 0.5rem',
+                            borderRadius: 4, fontSize: '0.875rem', color: '#2e7d32',
+                            fontFamily: '"D2Coding", monospace',
+                          }}>{children}</code>
+                        );
+                      },
+                      pre: ({ children }) => <>{children}</>,
+                      hr: () => (
+                        <div style={{ margin: '2.5rem auto', textAlign: 'center' as const }}>
+                          <span style={{ display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: '#ccc', margin: '0 6px' }} />
+                          <span style={{ display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: '#ccc', margin: '0 6px' }} />
+                          <span style={{ display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: '#ccc', margin: '0 6px' }} />
+                        </div>
+                      ),
+                      a: ({ href, children }) => {
+                        if (href?.startsWith('wiki://')) {
+                          const pageId = href.replace('wiki://', '');
+                          return (
+                            <a
+                              href="#"
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onNavigateToPage(pageId); }}
+                              style={{ color: '#00a32e', fontWeight: 600, textDecoration: 'none', borderBottom: '1px solid #00c73c', cursor: 'pointer' }}
+                            >
+                              {children}
+                            </a>
+                          );
+                        }
+                        return (
+                          <a href={href} target="_blank" rel="noopener noreferrer"
+                            style={{ color: '#00a32e', fontWeight: 500, textDecoration: 'none', borderBottom: '1px solid #00c73c' }}
+                          >{children}</a>
+                        );
+                      },
+                      del: ({ children }) => <del style={{ color: '#999', textDecoration: 'line-through' }}>{children}</del>,
+                      strong: ({ children }) => <strong style={{ fontWeight: 700, color: '#222' }}>{children}</strong>,
+                      em: ({ children }) => <em style={{ fontStyle: 'italic', color: '#555' }}>{children}</em>,
+                      img: ({ src, alt }) => (
+                        <span style={{ display: 'block', margin: '2rem 0', textAlign: 'center' as const }}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={src} alt={alt ?? ''} style={{ maxWidth: '100%', borderRadius: 8 }} />
+                          {alt && <span style={{ display: 'block', marginTop: '0.5rem', fontSize: '0.8rem', color: '#888' }}>{alt}</span>}
+                        </span>
+                      ),
+                      table: ({ children }) => (
+                        <div style={{ overflowX: 'auto', margin: '1.5rem 0' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>{children}</table>
+                        </div>
+                      ),
+                      th: ({ children }) => (
+                        <th style={{ textAlign: 'left', padding: '0.75rem', background: '#f5f6f7', borderBottom: '2px solid #ddd', fontWeight: 700, color: '#333' }}>{children}</th>
+                      ),
+                      td: ({ children }) => (
+                        <td style={{ padding: '0.75rem', borderBottom: '1px solid #eee', color: '#555' }}>{children}</td>
+                      ),
+                      input: ({ checked, ...props }) => (
+                        <input type="checkbox" checked={checked} readOnly style={{ marginRight: 8, accentColor: '#00c73c' }} {...props} />
+                      ),
+                    }}
+                  >
+                    {processWikiLinks(content)}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                /* ── 기본 스타일 프리뷰 ── */
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    h1: ({ children }) => <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.75rem', lineHeight: 1.3 }}>{children}</h1>,
+                    h2: ({ children }) => <h2 style={{ fontSize: '1.35rem', fontWeight: 600, color: 'var(--text-primary)', margin: '1.5rem 0 0.5rem', lineHeight: 1.3 }}>{children}</h2>,
+                    h3: ({ children }) => <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', margin: '1.25rem 0 0.4rem', lineHeight: 1.4 }}>{children}</h3>,
+                    p: ({ children }) => <p style={{ fontSize: '0.938rem', color: 'var(--text-primary)', margin: '0 0 0.85rem', lineHeight: 1.8 }}>{children}</p>,
+                    ul: ({ children }) => <ul style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: '0 0 0.75rem', paddingLeft: '1.5rem', listStyleType: 'disc', lineHeight: 1.7 }}>{children}</ul>,
+                    ol: ({ children }) => <ol style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: '0 0 0.75rem', paddingLeft: '1.5rem', listStyleType: 'decimal', lineHeight: 1.7 }}>{children}</ol>,
+                    li: ({ children }) => <li style={{ margin: '0.15rem 0' }}>{children}</li>,
+                    blockquote: ({ children }) => (
+                      <blockquote style={{ borderLeft: '3px solid var(--accent)', paddingLeft: '1rem', margin: '0.75rem 0', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                        {children}
+                      </blockquote>
+                    ),
+                    code: ({ children, className }) => {
+                      const isBlock = className?.includes('language-');
+                      if (isBlock) {
+                        return (
+                          <pre style={{ background: 'var(--bg-input)', borderRadius: 8, padding: '0.75rem 1rem', margin: '0.75rem 0', overflowX: 'auto', border: '1px solid var(--border-subtle)' }}>
+                            <code style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontFamily: 'monospace' }}>{children}</code>
+                          </pre>
+                        );
+                      }
+                      return <code style={{ background: 'var(--bg-hover)', padding: '0.15rem 0.4rem', borderRadius: 4, fontSize: '0.8rem', color: 'var(--accent-hover)', fontFamily: 'monospace' }}>{children}</code>;
+                    },
+                    pre: ({ children }) => <>{children}</>,
+                    hr: () => <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '1.5rem 0' }} />,
+                    a: ({ href, children }) => {
+                      if (href?.startsWith('wiki://')) {
+                        const pageId = href.replace('wiki://', '');
+                        return (
+                          <a
+                            href="#"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onNavigateToPage(pageId); }}
+                            style={{ color: 'var(--accent-hover)', textDecoration: 'underline', cursor: 'pointer' }}
+                          >
+                            {children}
+                          </a>
+                        );
+                      }
+                      return <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-hover)', textDecoration: 'underline' }}>{children}</a>;
+                    },
+                    del: ({ children }) => <del style={{ color: 'var(--text-tertiary)', textDecoration: 'line-through' }}>{children}</del>,
+                    strong: ({ children }) => <strong style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{children}</strong>,
+                    em: ({ children }) => <em style={{ fontStyle: 'italic', color: 'var(--text-secondary)' }}>{children}</em>,
+                    table: ({ children }) => (
+                      <div style={{ overflowX: 'auto', margin: '0.75rem 0' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>{children}</table>
+                      </div>
+                    ),
+                    th: ({ children }) => <th style={{ textAlign: 'left', padding: '0.5rem 0.75rem', borderBottom: '2px solid var(--border)', fontWeight: 600, color: 'var(--text-primary)' }}>{children}</th>,
+                    td: ({ children }) => <td style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>{children}</td>,
+                    input: ({ checked, ...props }) => (
+                      <input type="checkbox" checked={checked} readOnly style={{ marginRight: 6, accentColor: 'var(--accent)' }} {...props} />
+                    ),
+                  }}
+                >
+                  {processWikiLinks(content)}
+                </ReactMarkdown>
+              )
             ) : (
-              <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
-                클릭하여 작성 시작... (마크다운 지원)
+              <p className="text-sm" style={{ color: isBlogCategory ? '#999' : 'var(--text-tertiary)' }}>
+                클릭하여 작성 시작... {isBlogCategory ? '(블로그 스타일로 미리보기됩니다)' : '(마크다운 지원)'}
               </p>
             )}
           </div>
