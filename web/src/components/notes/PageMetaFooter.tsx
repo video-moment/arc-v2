@@ -8,10 +8,9 @@ interface PageMetaFooterProps {
 export default function PageMetaFooter({ content, updatedAt }: PageMetaFooterProps) {
   const stats = useMemo(() => {
     const text = content.trim();
-    const chars = text.length;
-    const words = text ? text.split(/\s+/).length : 0;
-    const readingTime = Math.max(1, Math.ceil(words / 200));
-    return { chars, words, readingTime };
+    const chars = text.replace(/\s/g, '').length;
+    const readingTime = Math.max(1, Math.ceil(chars / 500));
+    return { chars, readingTime };
   }, [content]);
 
   const lastModified = useMemo(() => {
@@ -28,18 +27,13 @@ export default function PageMetaFooter({ content, updatedAt }: PageMetaFooterPro
   }, [updatedAt]);
 
   return (
-    <div
-      className="flex items-center gap-3 px-8 py-2 text-[11px] shrink-0"
-      style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}
-    >
+    <div className="flex items-center gap-3 px-8 py-2 text-[11px] text-muted-foreground/60 shrink-0 border-t">
       <span>{stats.chars.toLocaleString()}자</span>
-      <span style={{ opacity: 0.3 }}>·</span>
-      <span>{stats.words.toLocaleString()}단어</span>
-      <span style={{ opacity: 0.3 }}>·</span>
+      <span className="opacity-30">·</span>
       <span>약 {stats.readingTime}분 읽기</span>
       {lastModified && (
         <>
-          <span style={{ opacity: 0.3 }}>·</span>
+          <span className="opacity-30">·</span>
           <span>수정 {lastModified}</span>
         </>
       )}

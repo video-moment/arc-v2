@@ -21,8 +21,47 @@ const DOHWA_PROJECT = '/Users/vimo/Desktop/ilju-mbti-project';
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 const POLL_TIMEOUT = 30; // long polling timeout (seconds)
 const CLAUDE_TIMEOUT = 120_000; // 2 minutes max for claude CLI
+const MAX_HISTORY = 20; // keep last N messages for context
+const HISTORY_RESET_MS = 30 * 60 * 1000; // reset after 30 min inactivity
 
 let lastUpdateId = 0;
+
+// ── Conversation history per chat ──
+interface ChatMessage { role: 'user' | 'assistant'; text: string; ts: number }
+const chatHistories = new Map<string, ChatMessage[]>();
+
+function getChatHistory(chatId: string): ChatMessage[] {
+  if (!chatHistories.has(chatId)) chatHistories.set(chatId, []);
+  const history = chatHistories.get(chatId)!;
+
+  // Reset if last message is too old
+  if (history.length > 0 && Date.now() - history[history.length - 1].ts > HISTORY_RESET_MS) {
+    history.length = 0;
+  }
+
+  return history;
+}
+
+function addToHistory(chatId: string, role: 'user' | 'assistant', text: string) {
+  const history = getChatHistory(chatId);
+  history.push({ role, text, ts: Date.now() });
+  // Trim to max size
+  while (history.length > MAX_HISTORY) history.shift();
+}
+
+function buildPromptWithHistory(chatId: string, currentMessage: string): string {
+  const history = getChatHistory(chatId);
+
+  if (history.length === 0) return currentMessage;
+
+  let prompt = '아래는 지금까지의 대화 내역이야. 이 맥락을 유지하면서 마지막 메시지에 답해줘.\n\n';
+  for (const msg of history) {
+    const label = msg.role === 'user' ? '사용자' : '도화';
+    prompt += `[${label}]: ${msg.text}\n\n`;
+  }
+  prompt += `[사용자]: ${currentMessage}\n\n위 대화의 마지막 메시지에 답해줘.`;
+  return prompt;
+}
 
 // ── Telegram API helpers ──
 async function tgApi(method: string, body?: Record<string, unknown>): Promise<any> {
@@ -237,13 +276,21 @@ async function pollLoop() {
         // Push user message to ARC
         arcSessionId = await pushToArc(arcSessionId, userName, text);
 
-        // Call Claude CLI
-        console.log('[Claude] Calling CLI...');
+        // Build prompt with conversation history
+        const chatIdStr = String(chatId);
+        const prompt = buildPromptWithHistory(chatIdStr, text);
+        addToHistory(chatIdStr, 'user', text);
+
+        // Call Claude CLI with full context
+        console.log(`[Claude] Calling CLI... (history: ${getChatHistory(chatIdStr).length} msgs)`);
         const startTime = Date.now();
-        const response = await callClaude(text);
+        const response = await callClaude(prompt);
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         console.log(`[Claude] Done in ${elapsed}s, length=${response.length}`);
         console.log(`[Response] ${response.slice(0, 100)}`);
+
+        // Store assistant response in history
+        addToHistory(chatIdStr, 'assistant', response);
 
         // Send response to Telegram
         console.log('[Telegram] Sending response...');

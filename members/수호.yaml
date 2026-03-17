@@ -1,0 +1,23 @@
+name: 수호
+role: coder
+team: ERP개발팀
+camp: vimo
+is_leader: false
+created: 2026-03-12
+total_tasks: 2
+learned:
+  - rule: 타입 정의가 또 누락되었다
+    source: 검수가 반복 지적
+    added: 2026-03-12
+    confidence: 0.6
+strengths: []
+weaknesses:
+  - 타입 정의 누락
+  - 에러 핸들링 누락
+growth_log:
+  - date: 2026-03-12
+    event: partial_success — 2건 업데이트
+    trigger: "검수 검수 (task: task-001)"
+  - date: 2026-03-12
+    event: partial_success — 1건 업데이트
+    trigger: "검수 검수 (task: task-002)"

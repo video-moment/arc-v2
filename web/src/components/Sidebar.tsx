@@ -1,8 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useSidebar } from './SidebarContext';
+import { usePathname, useRouter } from 'next/navigation';
+import {
+  Monitor, Users, UserCircle, TrendingUp, MessagesSquare, ScrollText,
+  Timer, FileText, ChevronLeft, ChevronRight, Layers, Eye, Pencil,
+} from 'lucide-react';
+
+import { useSidebar, type AppMode } from './SidebarContext';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 interface NavItem {
   href: string;
@@ -15,179 +23,202 @@ interface NavSection {
   items: NavItem[];
 }
 
-const NAV_SECTIONS: NavSection[] = [
+const MONITOR_SECTIONS: NavSection[] = [
   {
-    label: '모니터링',
+    label: '회사',
     items: [
-      { href: '/', label: '에이전트', icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.22 4.22l2.83 2.83m9.9 9.9l2.83 2.83M1 12h4m14 0h4M4.22 19.78l2.83-2.83m9.9-9.9l2.83-2.83"/>
-        </svg>
-      )},
-      { href: '/monitor', label: '프롬프트', icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="3" width="9" height="9" rx="1"/><rect x="13" y="3" width="9" height="9" rx="1"/><rect x="2" y="14" width="9" height="9" rx="1"/><rect x="13" y="14" width="9" height="9" rx="1"/>
-        </svg>
-      )},
-      { href: '/squads', label: '스쿼드', icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
-        </svg>
-      )},
+      { href: '/', label: '현황', icon: <Monitor size={18} /> },
+      { href: '/camps', label: '캠프', icon: <Layers size={18} /> },
     ],
   },
   {
-    label: '파이프라인',
+    label: '조직',
     items: [
-      { href: '/pipeline', label: '파이프라인', icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2l8.66 5v10L12 22l-8.66-5V7z" />
-        </svg>
-      )},
-      { href: '/pipeline/botmunity', label: '봇뮤니티', icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-        </svg>
-      )},
+      { href: '/teams', label: '팀', icon: <Users size={18} /> },
+      { href: '/members', label: '멤버', icon: <UserCircle size={18} /> },
+      { href: '/growth', label: '성장', icon: <TrendingUp size={18} /> },
     ],
   },
   {
-    label: '도구',
+    label: '운영',
     items: [
-      { href: '/pomodoro', label: '뽀모도로', icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-        </svg>
-      )},
-      { href: '/notes', label: '노트', icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" y1="13" x2="8" y2="13"/>
-          <line x1="16" y1="17" x2="8" y2="17"/>
-          <line x1="10" y1="9" x2="8" y2="9"/>
-        </svg>
-      )},
+      { href: '/meetings', label: '팀장 회의', icon: <MessagesSquare size={18} /> },
+      { href: '/logs', label: '작업 로그', icon: <ScrollText size={18} /> },
     ],
   },
 ];
 
+const WORKSPACE_SECTIONS: NavSection[] = [
+  {
+    label: '도구',
+    items: [
+      { href: '/pomodoro', label: '할 일', icon: <Timer size={18} /> },
+      { href: '/notes', label: '노트', icon: <FileText size={18} /> },
+    ],
+  },
+];
+
+const MODE_CONFIG: Record<AppMode, { label: string; switchLabel: string; icon: React.ReactNode; color: string }> = {
+  monitor: { label: '모니터링', switchLabel: '모니터링으로', icon: <Eye size={14} />, color: 'from-emerald-500 to-teal-600' },
+  workspace: { label: '워크스페이스', switchLabel: '워크스페이스로', icon: <Pencil size={14} />, color: 'from-blue-500 to-indigo-600' },
+};
+
+const HIDDEN_SIDEBAR_PATHS = ['/notes'];
+
 export default function Sidebar() {
   const pathname = usePathname();
-  const { collapsed, toggle } = useSidebar();
+  const router = useRouter();
+  const { collapsed, toggle, mode, setMode } = useSidebar();
+
+  // 노트 등 전용 레이아웃 페이지에서는 글로벌 사이드바 숨김
+  if (HIDDEN_SIDEBAR_PATHS.some(p => pathname.startsWith(p))) {
+    return null;
+  }
+
+  const sections = mode === 'monitor' ? MONITOR_SECTIONS : WORKSPACE_SECTIONS;
+  const otherMode: AppMode = mode === 'monitor' ? 'workspace' : 'monitor';
+  const currentConfig = MODE_CONFIG[mode];
+  const otherConfig = MODE_CONFIG[otherMode];
+
+  // 모드 전환 시 해당 모드의 첫 페이지로 이동
+  const handleModeSwitch = () => {
+    setMode(otherMode);
+    if (otherMode === 'monitor') {
+      router.push('/');
+    } else {
+      router.push('/pomodoro');
+    }
+  };
 
   return (
-    <aside
-      className="fixed left-0 top-0 h-full flex flex-col z-50 transition-all duration-200"
-      style={{
-        width: collapsed ? '56px' : '240px',
-        background: 'var(--bg-secondary)',
-        borderRight: '1px solid var(--border-subtle)',
-      }}
-    >
-      {/* Logo + Toggle */}
-      <div className={`flex items-center ${collapsed ? 'justify-center px-2' : 'justify-between px-6'} py-6`}>
-        {!collapsed && (
-          <Link href="/" className="flex items-center gap-2.5">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
-              style={{ background: 'var(--gradient-accent)' }}
-            >
-              A
-            </div>
-            <div>
-              <span className="text-sm font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                ARC V2
-              </span>
-              <p className="text-[10px] leading-tight" style={{ color: 'var(--text-tertiary)' }}>
-                에이전트 대시보드
-              </p>
-            </div>
-          </Link>
-        )}
-        <button
-          onClick={toggle}
-          className="w-7 h-7 rounded-md flex items-center justify-center transition-colors cursor-pointer shrink-0"
-          style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}
-          title={collapsed ? '메뉴 펼치기' : '메뉴 접기'}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            {collapsed ? (
-              <path d="M9 18l6-6-6-6"/>
-            ) : (
-              <path d="M15 18l-6-6 6-6"/>
-            )}
-          </svg>
-        </button>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 px-2 space-y-4 overflow-y-auto">
-        {NAV_SECTIONS.map((section, sIdx) => (
-          <div key={section.label}>
-            {/* Section divider (skip first) */}
-            {sIdx > 0 && !collapsed && (
-              <div
-                className="mx-3 mb-2"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              />
-            )}
-            {/* Section label */}
-            {!collapsed && (
-              <p
-                className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-widest"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                {section.label}
-              </p>
-            )}
-            {collapsed && sIdx > 0 && (
-              <div
-                className="mx-2 mb-2"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              />
-            )}
-            <div className="space-y-0.5">
-              {section.items.map(({ href, label, icon }) => {
-                const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={`flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-3'} py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150`}
-                    style={{
-                      background: active ? 'var(--accent-soft)' : 'transparent',
-                      color: active ? 'var(--accent-hover)' : 'var(--text-secondary)',
-                    }}
-                    title={collapsed ? label : undefined}
-                  >
-                    <span style={{ opacity: active ? 1 : 0.6 }}>{icon}</span>
-                    {!collapsed && label}
-                    {!collapsed && active && (
-                      <span
-                        className="ml-auto w-1.5 h-1.5 rounded-full"
-                        style={{ background: 'var(--accent)' }}
-                      />
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* Footer */}
-      <div className={`${collapsed ? 'px-2 justify-center' : 'px-6'} py-4 flex`} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full animate-pulse-dot shrink-0" style={{ background: 'var(--green)' }} />
+    <TooltipProvider>
+      <aside
+        className="fixed left-0 top-0 h-full flex flex-col z-50 transition-all duration-300 bg-sidebar text-sidebar-foreground border-r border-sidebar-border"
+        style={{ width: collapsed ? '56px' : '240px' }}
+      >
+        {/* Logo + Toggle */}
+        <div className={`flex items-center ${collapsed ? 'justify-center px-2' : 'justify-between px-6'} py-6`}>
           {!collapsed && (
-            <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-              백엔드 연결됨
-            </span>
+            <Link href={mode === 'monitor' ? '/' : '/pomodoro'} className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0 bg-gradient-to-br ${currentConfig.color}`}>
+                N
+              </div>
+              <div>
+                <span className="text-sm font-bold tracking-tight text-sidebar-foreground">
+                  NextCamp
+                </span>
+                <p className="text-[10px] leading-tight text-sidebar-foreground/50">
+                  {currentConfig.label}
+                </p>
+              </div>
+            </Link>
+          )}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={toggle}
+            className="shrink-0 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+            title={collapsed ? '메뉴 펼치기' : '메뉴 접기'}
+          >
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          </Button>
+        </div>
+
+        {/* Mode Switcher */}
+        <div className="px-2 mb-2">
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={<button onClick={handleModeSwitch} />}
+                className="w-full flex items-center justify-center py-2 rounded-lg text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+              >
+                {otherConfig.icon}
+              </TooltipTrigger>
+              <TooltipContent side="right">{otherConfig.switchLabel} 전환</TooltipContent>
+            </Tooltip>
+          ) : (
+            <button
+              onClick={handleModeSwitch}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+            >
+              {otherConfig.icon}
+              <span>{otherConfig.switchLabel} 전환</span>
+            </button>
           )}
         </div>
-      </div>
-    </aside>
+
+        <Separator className="mx-3 bg-sidebar-border" />
+
+        {/* Nav */}
+        <nav className="flex-1 px-2 space-y-4 overflow-y-auto mt-2">
+          {sections.map((section, sIdx) => (
+            <div key={section.label}>
+              {sIdx > 0 && (
+                <Separator className="my-2 mx-1 bg-sidebar-border" />
+              )}
+              {!collapsed && (
+                <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40">
+                  {section.label}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {section.items.map(({ href, label, icon }) => {
+                  const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+                  const linkEl = (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={[
+                        'flex items-center py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150',
+                        collapsed ? 'justify-center px-0' : 'gap-3 px-3',
+                        active
+                          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                          : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+                      ].join(' ')}
+                    >
+                      <span className={active ? 'opacity-100' : 'opacity-60'}>{icon}</span>
+                      {!collapsed && label}
+                      {!collapsed && active && (
+                        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                      )}
+                    </Link>
+                  );
+
+                  if (collapsed) {
+                    return (
+                      <Tooltip key={href}>
+                        <TooltipTrigger render={<Link href={href} />} className={[
+                          'flex items-center py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 justify-center px-0',
+                          active
+                            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                            : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+                        ].join(' ')}>
+                          <span className={active ? 'opacity-100' : 'opacity-60'}>{icon}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">{label}</TooltipContent>
+                      </Tooltip>
+                    );
+                  }
+
+                  return linkEl;
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        {/* Footer */}
+        <div className={`${collapsed ? 'px-2 justify-center' : 'px-6'} py-4 flex border-t border-sidebar-border`}>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full animate-pulse bg-green-500 shrink-0" />
+            {!collapsed && (
+              <span className="text-[11px] text-sidebar-foreground/50">
+                백엔드 연결됨
+              </span>
+            )}
+          </div>
+        </div>
+      </aside>
+    </TooltipProvider>
   );
 }

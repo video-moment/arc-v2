@@ -82,6 +82,9 @@ export interface PomoTask {
   completedAt?: string;
   createdAt: string;
   updatedAt: string;
+  goalId?: string;
+  assigneeType: 'me' | 'agent';
+  assigneeAgentId?: string;
 }
 
 export interface PomoSession {
@@ -93,11 +96,46 @@ export interface PomoSession {
   isCompleted: boolean;
 }
 
+export type AssigneeType = 'me' | 'agent';
+
+export interface PomoTaskComment {
+  id: string;
+  taskId: string;
+  agentId?: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface PomoGoal {
+  id: string;
+  title: string;
+  description: string;
+  status: 'active' | 'completed' | 'archived';
+  priority: 'high' | 'medium' | 'low';
+  targetDate?: string;
+  targetPomodoros?: number;
+  color: string;
+  sortOrder: number;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MessageReaction {
   id: string;
   messageId: string;
   agentId: string;
   emoji: string;
+  createdAt: string;
+}
+
+export interface PomoMilestone {
+  id: string;
+  goalId: string;
+  title: string;
+  isCompleted: boolean;
+  sortOrder: number;
+  completedAt?: string;
   createdAt: string;
 }
 
@@ -194,6 +232,9 @@ function toPomoTask(row: any): PomoTask {
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    goalId: row.goal_id ?? undefined,
+    assigneeType: row.assignee_type ?? 'me',
+    assigneeAgentId: row.assignee_agent_id ?? undefined,
   };
 }
 
@@ -205,6 +246,23 @@ function toPomoSession(row: any): PomoSession {
     startedAt: row.started_at,
     completedAt: row.completed_at,
     isCompleted: row.is_completed,
+  };
+}
+
+function toPomoGoal(row: any): PomoGoal {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description || '',
+    status: row.status,
+    priority: row.priority,
+    targetDate: row.target_date ?? undefined,
+    targetPomodoros: row.target_pomodoros ?? undefined,
+    color: row.color || '#6366f1',
+    sortOrder: row.sort_order ?? 0,
+    completedAt: row.completed_at ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -411,6 +469,9 @@ export async function createPomoTask(input: {
   category?: string;
   estimatedPomodoros?: number;
   dueDate?: string;
+  goalId?: string;
+  assigneeType?: string;
+  assigneeAgentId?: string;
 }): Promise<PomoTask> {
   const { data, error } = await supabase
     .from('pomo_tasks')
@@ -423,6 +484,9 @@ export async function createPomoTask(input: {
       category: input.category,
       estimated_pomodoros: input.estimatedPomodoros || 1,
       due_date: input.dueDate,
+      goal_id: input.goalId || null,
+      assignee_type: input.assigneeType || 'me',
+      assignee_agent_id: input.assigneeAgentId || null,
     })
     .select()
     .single();
@@ -441,6 +505,9 @@ export async function updatePomoTask(id: string, updates: Partial<{
   dueDate: string | null;
   sortOrder: number;
   completedAt: string | null;
+  goalId: string | null;
+  assigneeType: string;
+  assigneeAgentId: string | null;
 }>): Promise<PomoTask> {
   const dbUpdates: Record<string, any> = {};
   if (updates.title !== undefined) dbUpdates.title = updates.title;
@@ -453,6 +520,9 @@ export async function updatePomoTask(id: string, updates: Partial<{
   if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
   if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
   if (updates.completedAt !== undefined) dbUpdates.completed_at = updates.completedAt;
+  if (updates.goalId !== undefined) dbUpdates.goal_id = updates.goalId;
+  if (updates.assigneeType !== undefined) dbUpdates.assignee_type = updates.assigneeType;
+  if (updates.assigneeAgentId !== undefined) dbUpdates.assignee_agent_id = updates.assigneeAgentId;
   const { data, error } = await supabase
     .from('pomo_tasks')
     .update(dbUpdates)
@@ -501,6 +571,156 @@ export async function getPomoStats(days = 7): Promise<PomoSession[]> {
     .order('started_at', { ascending: false });
   if (error) throw error;
   return (data || []).map(toPomoSession);
+}
+
+// ── Pomodoro Goals ──
+
+export async function getPomoGoals(status?: string): Promise<PomoGoal[]> {
+  let query = supabase.from('pomo_goals').select('*').order('sort_order');
+  if (status) query = query.eq('status', status);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(toPomoGoal);
+}
+
+export async function createPomoGoal(input: {
+  title: string;
+  description?: string;
+  priority?: string;
+  targetDate?: string;
+  targetPomodoros?: number;
+  color?: string;
+}): Promise<PomoGoal> {
+  const { data, error } = await supabase
+    .from('pomo_goals')
+    .insert({
+      title: input.title,
+      description: input.description || '',
+      priority: input.priority || 'medium',
+      target_date: input.targetDate || null,
+      target_pomodoros: input.targetPomodoros || null,
+      color: input.color || '#6366f1',
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return toPomoGoal(data);
+}
+
+export async function updatePomoGoal(id: string, updates: Partial<{
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  targetDate: string | null;
+  targetPomodoros: number | null;
+  color: string;
+  sortOrder: number;
+  completedAt: string | null;
+}>): Promise<PomoGoal> {
+  const dbUpdates: Record<string, any> = {};
+  if (updates.title !== undefined) dbUpdates.title = updates.title;
+  if (updates.description !== undefined) dbUpdates.description = updates.description;
+  if (updates.status !== undefined) dbUpdates.status = updates.status;
+  if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
+  if (updates.targetDate !== undefined) dbUpdates.target_date = updates.targetDate;
+  if (updates.targetPomodoros !== undefined) dbUpdates.target_pomodoros = updates.targetPomodoros;
+  if (updates.color !== undefined) dbUpdates.color = updates.color;
+  if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+  if (updates.completedAt !== undefined) dbUpdates.completed_at = updates.completedAt;
+  const { data, error } = await supabase
+    .from('pomo_goals')
+    .update(dbUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toPomoGoal(data);
+}
+
+export async function deletePomoGoal(id: string): Promise<void> {
+  const { error } = await supabase.from('pomo_goals').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── Pomodoro Milestones ──
+
+function toPomoMilestone(row: any): PomoMilestone {
+  return {
+    id: row.id,
+    goalId: row.goal_id,
+    title: row.title,
+    isCompleted: row.is_completed,
+    sortOrder: row.sort_order,
+    completedAt: row.completed_at ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+export async function getPomoMilestones(goalId: string): Promise<PomoMilestone[]> {
+  const { data, error } = await supabase
+    .from('pomo_goal_milestones')
+    .select('*')
+    .eq('goal_id', goalId)
+    .order('sort_order');
+  if (error) throw error;
+  return (data || []).map(toPomoMilestone);
+}
+
+export async function createPomoMilestone(goalId: string, title: string): Promise<PomoMilestone> {
+  const { data, error } = await supabase
+    .from('pomo_goal_milestones')
+    .insert({ goal_id: goalId, title })
+    .select()
+    .single();
+  if (error) throw error;
+  return toPomoMilestone(data);
+}
+
+export async function updatePomoMilestone(
+  id: string,
+  updates: Partial<{ title: string; isCompleted: boolean; sortOrder: number; completedAt: string | null }>
+): Promise<PomoMilestone> {
+  const dbUpdates: Record<string, any> = {};
+  if (updates.title !== undefined) dbUpdates.title = updates.title;
+  if (updates.isCompleted !== undefined) dbUpdates.is_completed = updates.isCompleted;
+  if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+  if (updates.completedAt !== undefined) dbUpdates.completed_at = updates.completedAt;
+  const { data, error } = await supabase
+    .from('pomo_goal_milestones')
+    .update(dbUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toPomoMilestone(data);
+}
+
+export async function deletePomoMilestone(id: string): Promise<void> {
+  const { error } = await supabase.from('pomo_goal_milestones').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── PomoTask Comments ──
+
+function toPomoTaskComment(row: any): PomoTaskComment {
+  return {
+    id: row.id,
+    taskId: row.task_id,
+    agentId: row.agent_id ?? undefined,
+    content: row.content,
+    createdAt: row.created_at,
+  };
+}
+
+export async function getPomoTaskComments(taskId: string): Promise<PomoTaskComment[]> {
+  const { data, error } = await supabase
+    .from('pomo_task_comments')
+    .select('*')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data || []).map(toPomoTaskComment);
 }
 
 // ── Telegram ──
@@ -742,13 +962,14 @@ export async function createNotePage(groupId: string, title: string, emoji = '�
   return toNotePage(data);
 }
 
-export async function updateNotePage(id: string, updates: Partial<Pick<NotePage, 'title' | 'emoji' | 'content' | 'sortOrder' | 'isPinned' | 'categoryId'>>): Promise<NotePage> {
+export async function updateNotePage(id: string, updates: Partial<Pick<NotePage, 'title' | 'emoji' | 'content' | 'sortOrder' | 'isPinned' | 'categoryId' | 'groupId'>>): Promise<NotePage> {
   const dbUpdates: Record<string, any> = {};
   if (updates.title !== undefined) dbUpdates.title = updates.title;
   if (updates.emoji !== undefined) dbUpdates.emoji = updates.emoji;
   if (updates.content !== undefined) dbUpdates.content = updates.content;
   if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
   if (updates.isPinned !== undefined) dbUpdates.is_pinned = updates.isPinned;
+  if (updates.groupId !== undefined) dbUpdates.group_id = updates.groupId;
   if ('categoryId' in updates) dbUpdates.category_id = updates.categoryId ?? null;
   const { data, error } = await supabase
     .from('note_pages')
@@ -762,6 +983,299 @@ export async function updateNotePage(id: string, updates: Partial<Pick<NotePage,
 
 export async function deleteNotePage(id: string): Promise<void> {
   const { error } = await supabase.from('note_pages').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── Summaries ──
+
+export interface Summary {
+  id: string;
+  sourceType: 'youtube' | 'web' | 'pdf';
+  sourceUrl?: string;
+  sourceTitle: string;
+  originalText: string;
+  summary: string;
+  model: string;
+  notePageId?: string;
+  goalId?: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function toSummary(row: any): Summary {
+  return {
+    id: row.id,
+    sourceType: row.source_type,
+    sourceUrl: row.source_url ?? undefined,
+    sourceTitle: row.source_title,
+    originalText: row.original_text || '',
+    summary: row.summary,
+    model: row.model,
+    notePageId: row.note_page_id ?? undefined,
+    goalId: row.goal_id ?? undefined,
+    metadata: row.metadata,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function getSummaries(filter?: { sourceType?: string }): Promise<Summary[]> {
+  let query = supabase
+    .from('summaries')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (filter?.sourceType) query = query.eq('source_type', filter.sourceType);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(toSummary);
+}
+
+export async function getSummary(id: string): Promise<Summary> {
+  const { data, error } = await supabase
+    .from('summaries')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return toSummary(data);
+}
+
+export async function createYoutubeSummary(url: string): Promise<Summary> {
+  const res = await fetch('/api/summarizer/youtube', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '요약 실패' }));
+    throw new Error(err.error || '요약 실패');
+  }
+  const json = await res.json();
+  return toSummary(json.summary);
+}
+
+export async function createWebSummary(url: string): Promise<Summary> {
+  const res = await fetch('/api/summarizer/web', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '요약 실패' }));
+    throw new Error(err.error || '요약 실패');
+  }
+  const json = await res.json();
+  return toSummary(json.summary);
+}
+
+export async function createPdfSummary(file: File): Promise<Summary> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch('/api/summarizer/pdf', {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '요약 실패' }));
+    throw new Error(err.error || '요약 실패');
+  }
+  const json = await res.json();
+  return toSummary(json.summary);
+}
+
+export async function updateSummary(id: string, updates: { goalId?: string | null; notePageId?: string | null }): Promise<Summary> {
+  const dbUpdates: Record<string, any> = {};
+  if (updates.goalId !== undefined) dbUpdates.goal_id = updates.goalId;
+  if (updates.notePageId !== undefined) dbUpdates.note_page_id = updates.notePageId;
+  const { data, error } = await supabase
+    .from('summaries')
+    .update(dbUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toSummary(data);
+}
+
+export async function deleteSummary(id: string): Promise<void> {
+  const { error } = await supabase.from('summaries').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function saveSummaryToNotes(id: string, groupId: string): Promise<{ notePageId: string }> {
+  const res = await fetch('/api/summarizer/' + id + '/save-to-notes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groupId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '노트 저장 실패' }));
+    throw new Error(err.error || '노트 저장 실패');
+  }
+  const json = await res.json();
+  return { notePageId: json.page.id };
+}
+
+// ── Goals ──
+
+export interface Goal {
+  id: string;
+  title: string;
+  description: string;
+  status: 'active' | 'completed' | 'archived';
+  priority: 'high' | 'medium' | 'low';
+  dueDate?: string;
+  parentId?: string;
+  progress: number;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GoalCheckItem {
+  id: string;
+  goalId: string;
+  title: string;
+  isCompleted: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
+function toGoal(row: any): Goal {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description || '',
+    status: row.status,
+    priority: row.priority,
+    dueDate: row.due_date ?? undefined,
+    parentId: row.parent_id ?? undefined,
+    progress: row.progress ?? 0,
+    sortOrder: row.sort_order ?? 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toGoalCheckItem(row: any): GoalCheckItem {
+  return {
+    id: row.id,
+    goalId: row.goal_id,
+    title: row.title,
+    isCompleted: row.is_completed ?? false,
+    sortOrder: row.sort_order ?? 0,
+    createdAt: row.created_at,
+  };
+}
+
+export async function getGoals(filter?: { status?: string; parentId?: string | null }): Promise<Goal[]> {
+  let query = supabase.from('goals').select('*').order('sort_order');
+  if (filter?.status) query = query.eq('status', filter.status);
+  if (filter?.parentId !== undefined) {
+    if (filter.parentId === null) query = query.is('parent_id', null);
+    else query = query.eq('parent_id', filter.parentId);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(toGoal);
+}
+
+export async function createGoal(input: {
+  title: string;
+  description?: string;
+  priority?: string;
+  dueDate?: string;
+  parentId?: string;
+}): Promise<Goal> {
+  const { data, error } = await supabase
+    .from('goals')
+    .insert({
+      title: input.title,
+      description: input.description || '',
+      priority: input.priority || 'medium',
+      due_date: input.dueDate || null,
+      parent_id: input.parentId || null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return toGoal(data);
+}
+
+export async function updateGoal(id: string, updates: Partial<{
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  dueDate: string | null;
+  progress: number;
+  sortOrder: number;
+}>): Promise<Goal> {
+  const dbUpdates: Record<string, any> = {};
+  if (updates.title !== undefined) dbUpdates.title = updates.title;
+  if (updates.description !== undefined) dbUpdates.description = updates.description;
+  if (updates.status !== undefined) dbUpdates.status = updates.status;
+  if (updates.priority !== undefined) dbUpdates.priority = updates.priority;
+  if (updates.dueDate !== undefined) dbUpdates.due_date = updates.dueDate;
+  if (updates.progress !== undefined) dbUpdates.progress = updates.progress;
+  if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+  const { data, error } = await supabase
+    .from('goals')
+    .update(dbUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toGoal(data);
+}
+
+export async function deleteGoal(id: string): Promise<void> {
+  const { error } = await supabase.from('goals').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function getGoalCheckItems(goalId: string): Promise<GoalCheckItem[]> {
+  const { data, error } = await supabase
+    .from('goal_check_items')
+    .select('*')
+    .eq('goal_id', goalId)
+    .order('sort_order');
+  if (error) throw error;
+  return (data || []).map(toGoalCheckItem);
+}
+
+export async function createGoalCheckItem(goalId: string, title: string): Promise<GoalCheckItem> {
+  const { data, error } = await supabase
+    .from('goal_check_items')
+    .insert({ goal_id: goalId, title })
+    .select()
+    .single();
+  if (error) throw error;
+  return toGoalCheckItem(data);
+}
+
+export async function updateGoalCheckItem(id: string, updates: Partial<{
+  title: string;
+  isCompleted: boolean;
+  sortOrder: number;
+}>): Promise<GoalCheckItem> {
+  const dbUpdates: Record<string, any> = {};
+  if (updates.title !== undefined) dbUpdates.title = updates.title;
+  if (updates.isCompleted !== undefined) dbUpdates.is_completed = updates.isCompleted;
+  if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+  const { data, error } = await supabase
+    .from('goal_check_items')
+    .update(dbUpdates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toGoalCheckItem(data);
+}
+
+export async function deleteGoalCheckItem(id: string): Promise<void> {
+  const { error } = await supabase.from('goal_check_items').delete().eq('id', id);
   if (error) throw error;
 }
 
@@ -1023,6 +1537,280 @@ export async function deleteDirective(id: string): Promise<void> {
 }
 
 // ── Schedule Messages ──
+
+// ── Content Studio ──
+
+export interface AgentRules {
+  id: string;
+  agentId: string;
+  rules: Record<string, any>;
+  reviewChecklist: any[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ThemeSection {
+  name: string;
+  role: string;
+  description?: string;
+  fixed?: boolean;
+}
+
+export interface ContentTheme {
+  id: string;
+  name: string;
+  description: string;
+  structure: ThemeSection[];
+  variables: string[];
+  rules: Record<string, any>;
+  reviewChecklist: any[];
+  referenceText: string;
+  status: 'active' | 'draft' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+  pieceCounts?: Record<string, number>;
+}
+
+export interface ContentPiece {
+  id: string;
+  themeId: string;
+  title: string;
+  variables: Record<string, string>;
+  content: string;
+  status: 'draft' | 'generating' | 'review' | 'approved' | 'published';
+  reviewNotes: string;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  theme?: ContentTheme;
+}
+
+function toAgentRules(row: any): AgentRules {
+  return {
+    id: row.id,
+    agentId: row.agent_id,
+    rules: row.rules || {},
+    reviewChecklist: row.review_checklist || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toContentTheme(row: any): ContentTheme {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description || '',
+    structure: row.structure || [],
+    variables: row.variables || [],
+    rules: row.rules || {},
+    reviewChecklist: row.review_checklist || [],
+    referenceText: row.reference_text || '',
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    pieceCounts: row.piece_counts,
+  };
+}
+
+function toContentPiece(row: any): ContentPiece {
+  return {
+    id: row.id,
+    themeId: row.theme_id,
+    title: row.title,
+    variables: row.variables || {},
+    content: row.content || '',
+    status: row.status,
+    reviewNotes: row.review_notes || '',
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    theme: row.content_themes ? toContentTheme(row.content_themes) : undefined,
+  };
+}
+
+export async function getAgentRules(agentId: string): Promise<AgentRules | null> {
+  const { data, error } = await supabase
+    .from('agent_rules')
+    .select('*')
+    .eq('agent_id', agentId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? toAgentRules(data) : null;
+}
+
+export async function getContentThemes(status?: string): Promise<ContentTheme[]> {
+  let query = supabase.from('content_themes').select('*').order('created_at', { ascending: false });
+  if (status) query = query.eq('status', status);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(toContentTheme);
+}
+
+export async function getContentTheme(id: string): Promise<ContentTheme> {
+  const { data, error } = await supabase
+    .from('content_themes')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return toContentTheme(data);
+}
+
+export async function getContentPieces(params?: { themeId?: string; status?: string }): Promise<ContentPiece[]> {
+  let query = supabase
+    .from('content_pieces')
+    .select('*, content_themes(*)')
+    .order('created_at', { ascending: false });
+  if (params?.themeId) query = query.eq('theme_id', params.themeId);
+  if (params?.status) query = query.eq('status', params.status);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(toContentPiece);
+}
+
+export async function getContentPiece(id: string): Promise<ContentPiece> {
+  const { data, error } = await supabase
+    .from('content_pieces')
+    .select('*, content_themes(*)')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return toContentPiece(data);
+}
+
+export async function createContentTheme(data: Partial<ContentTheme>): Promise<ContentTheme> {
+  const dbData: Record<string, any> = {};
+  if (data.name !== undefined) dbData.name = data.name;
+  if (data.description !== undefined) dbData.description = data.description;
+  if (data.structure !== undefined) dbData.structure = data.structure;
+  if (data.variables !== undefined) dbData.variables = data.variables;
+  if (data.rules !== undefined) dbData.rules = data.rules;
+  if (data.reviewChecklist !== undefined) dbData.review_checklist = data.reviewChecklist;
+  if (data.referenceText !== undefined) dbData.reference_text = data.referenceText;
+  if (data.status !== undefined) dbData.status = data.status;
+  const { data: row, error } = await supabase
+    .from('content_themes')
+    .insert(dbData)
+    .select()
+    .single();
+  if (error) throw error;
+  return toContentTheme(row);
+}
+
+export async function updateContentTheme(id: string, data: Partial<ContentTheme>): Promise<ContentTheme> {
+  const dbData: Record<string, any> = {};
+  if (data.name !== undefined) dbData.name = data.name;
+  if (data.description !== undefined) dbData.description = data.description;
+  if (data.structure !== undefined) dbData.structure = data.structure;
+  if (data.variables !== undefined) dbData.variables = data.variables;
+  if (data.rules !== undefined) dbData.rules = data.rules;
+  if (data.reviewChecklist !== undefined) dbData.review_checklist = data.reviewChecklist;
+  if (data.referenceText !== undefined) dbData.reference_text = data.referenceText;
+  if (data.status !== undefined) dbData.status = data.status;
+  const { data: row, error } = await supabase
+    .from('content_themes')
+    .update(dbData)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toContentTheme(row);
+}
+
+export async function deleteContentTheme(id: string): Promise<void> {
+  const { error } = await supabase.from('content_themes').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function createContentPiece(data: Partial<ContentPiece>): Promise<ContentPiece> {
+  const dbData: Record<string, any> = {};
+  if (data.themeId !== undefined) dbData.theme_id = data.themeId;
+  if (data.title !== undefined) dbData.title = data.title;
+  if (data.variables !== undefined) dbData.variables = data.variables;
+  if (data.content !== undefined) dbData.content = data.content;
+  if (data.status !== undefined) dbData.status = data.status;
+  if (data.reviewNotes !== undefined) dbData.review_notes = data.reviewNotes;
+  const { data: row, error } = await supabase
+    .from('content_pieces')
+    .insert(dbData)
+    .select()
+    .single();
+  if (error) throw error;
+  return toContentPiece(row);
+}
+
+export async function updateContentPiece(id: string, data: Partial<ContentPiece>): Promise<ContentPiece> {
+  const dbData: Record<string, any> = {};
+  if (data.themeId !== undefined) dbData.theme_id = data.themeId;
+  if (data.title !== undefined) dbData.title = data.title;
+  if (data.variables !== undefined) dbData.variables = data.variables;
+  if (data.content !== undefined) dbData.content = data.content;
+  if (data.status !== undefined) dbData.status = data.status;
+  if (data.reviewNotes !== undefined) dbData.review_notes = data.reviewNotes;
+  if (data.publishedAt !== undefined) dbData.published_at = data.publishedAt;
+  const { data: row, error } = await supabase
+    .from('content_pieces')
+    .update(dbData)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toContentPiece(row);
+}
+
+export async function deleteContentPiece(id: string): Promise<void> {
+  const { error } = await supabase.from('content_pieces').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function upsertAgentRules(agentId: string, rules: any, reviewChecklist: any[]): Promise<AgentRules> {
+  const { data, error } = await supabase
+    .from('agent_rules')
+    .upsert(
+      { agent_id: agentId, rules, review_checklist: reviewChecklist },
+      { onConflict: 'agent_id' }
+    )
+    .select()
+    .single();
+  if (error) throw error;
+  return toAgentRules(data);
+}
+
+export async function generateContent(themeId: string, variables: Record<string, string>): Promise<ContentPiece> {
+  const res = await fetch('/api/content/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ themeId, variables }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '콘텐츠 생성 실패' }));
+    throw new Error(err.error || '콘텐츠 생성 실패');
+  }
+  const json = await res.json();
+  return toContentPiece(json.piece ?? json);
+}
+
+export async function reviewContent(pieceId: string): Promise<ContentPiece> {
+  const res = await fetch('/api/content/pieces/' + pieceId + '/review', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '콘텐츠 검수 실패' }));
+    throw new Error(err.error || '콘텐츠 검수 실패');
+  }
+  const json = await res.json();
+  return toContentPiece(json.piece ?? json);
+}
+
+export async function approveContent(pieceId: string): Promise<ContentPiece> {
+  return updateContentPiece(pieceId, { status: 'approved' });
+}
+
+export async function publishContent(pieceId: string): Promise<ContentPiece> {
+  return updateContentPiece(pieceId, { status: 'published', publishedAt: new Date().toISOString() });
+}
 
 export async function getScheduleMessages(agentId: string): Promise<ChatMessage[]> {
   // 에이전트의 모든 세션에서 스케줄 관련 메시지 검색

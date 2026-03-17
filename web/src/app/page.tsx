@@ -1,202 +1,237 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import { useEffect, useState } from 'react';
-import { getAgents, getSessions, type Agent, type ChatMessage } from '@/lib/api';
-import { supabase } from '@/lib/supabase';
-import AgentCard from '@/components/AgentCard';
 import Link from 'next/link';
+import {
+  Monitor, Users, UserCircle, Layers, TrendingUp, ChevronRight,
+  Crown, Cpu,
+} from 'lucide-react';
+import { getOverview, type Overview, type CampHierarchy } from '@/lib/nextcamp-api';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function HomePage() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [lastMessages, setLastMessages] = useState<Record<string, ChatMessage>>({});
+  const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const agentList = await getAgents();
-        setAgents(agentList);
-
-        // 각 에이전트의 최근 세션 → 최근 메시지 1개 로드
-        const msgMap: Record<string, ChatMessage> = {};
-        await Promise.all(
-          agentList.map(async (agent) => {
-            try {
-              const sessions = await getSessions(agent.id);
-              if (sessions.length > 0) {
-                const { data } = await supabase
-                  .from('chat_messages')
-                  .select('*')
-                  .eq('session_id', sessions[0].id)
-                  .order('created_at', { ascending: false })
-                  .limit(1);
-                if (data && data[0]) {
-                  msgMap[agent.id] = {
-                    id: data[0].id,
-                    sessionId: data[0].session_id,
-                    role: data[0].role,
-                    content: data[0].content,
-                    mediaUrl: data[0].media_url,
-                    mediaType: data[0].media_type,
-                    createdAt: data[0].created_at,
-                  };
-                }
-              }
-            } catch {}
-          })
-        );
-        setLastMessages(msgMap);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-
-    // 에이전트 상태 실시간 구독
-    const channel = supabase
-      .channel('agents-status')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'agents' },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const n = payload.new;
-            setAgents(prev => {
-              if (prev.some(a => a.id === n.id)) return prev;
-              return [...prev, {
-                id: n.id, name: n.name, description: n.description, type: n.type,
-                status: n.status, lastSeen: n.last_seen,
-                telegramBotToken: n.telegram_bot_token, telegramChatId: n.telegram_chat_id,
-                metadata: n.metadata, createdAt: n.created_at, updatedAt: n.updated_at,
-              }];
-            });
-          } else if (payload.eventType === 'UPDATE') {
-            const updated = payload.new;
-            setAgents(prev =>
-              prev.map(a =>
-                a.id === updated.id
-                  ? { ...a, name: updated.name, description: updated.description, status: updated.status, lastSeen: updated.last_seen }
-                  : a
-              )
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setAgents(prev => prev.filter(a => a.id !== payload.old.id));
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
-        (payload) => {
-          const msg = payload.new;
-          // session_id → agent_id 매핑 (이미 로드된 세션 기반)
-          setLastMessages(prev => {
-            const updated = { ...prev };
-            for (const [agentId, existing] of Object.entries(prev)) {
-              if (existing.sessionId === msg.session_id) {
-                updated[agentId] = {
-                  id: msg.id,
-                  sessionId: msg.session_id,
-                  role: msg.role,
-                  content: msg.content,
-                  mediaUrl: msg.media_url,
-                  mediaType: msg.media_type,
-                  createdAt: msg.created_at,
-                };
-                break;
-              }
-            }
-            return updated;
-          });
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    getOverview()
+      .then(setOverview)
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
-  const online = agents.filter(a => a.status === 'online');
-  const offline = agents.filter(a => a.status !== 'online');
+  if (loading) {
+    return (
+      <div className="max-w-5xl space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-80 rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (!overview) {
+    return (
+      <div className="text-center py-24">
+        <p className="text-muted-foreground">백엔드에 연결할 수 없습니다</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">localhost:3300이 실행 중인지 확인하세요</p>
+      </div>
+    );
+  }
+
+  const campHierarchy = overview.campHierarchy ?? [];
+  const unassignedTeams = overview.unassignedTeams ?? [];
+
+  const totalMembers = campHierarchy.reduce(
+    (sum, camp) => sum + camp.teams.reduce((s, t) => s + t.memberCount, 0), 0
+  );
 
   return (
-    <div className="max-w-6xl">
+    <div className="max-w-5xl">
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight mb-1">에이전트</h1>
-          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            총 {agents.length}개 등록 · {online.length}개 온라인
-          </p>
-        </div>
-        <Link
-          href="/pipeline"
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
-          style={{
-            background: 'var(--accent-soft)',
-            color: 'var(--accent-hover)',
-            border: '1px solid transparent',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
-          onMouseLeave={e => (e.currentTarget.style.borderColor = 'transparent')}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2l8.66 5v10L12 22l-8.66-5V7z" />
-          </svg>
-          파이프라인
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
-        </Link>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold tracking-tight mb-1">NextCamp</h1>
+        <p className="text-sm text-muted-foreground">회사 현황</p>
       </div>
 
-      {loading ? (
-        <div className="flex items-center gap-3 py-20 justify-center">
-          <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
-          <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>불러오는 중...</span>
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        <StatCard label="캠프" value={overview.camps} icon={<Monitor size={18} />} href="/camps" color="violet" />
+        <StatCard label="팀" value={overview.teams} icon={<Users size={18} />} href="/teams" color="emerald" />
+        <StatCard label="멤버" value={totalMembers} icon={<UserCircle size={18} />} href="/members" color="blue" />
+        <StatCard label="역할 풀" value={overview.roles} icon={<Layers size={18} />} href="/growth" color="amber" />
+      </div>
+
+      {/* Camp Hierarchy */}
+      <section>
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-5">
+          조직 구조
+        </h2>
+        <div className="space-y-6">
+          {campHierarchy.map(camp => (
+            <CampBlock key={camp.id} camp={camp} />
+          ))}
+
+          {/* 미배치 팀 */}
+          {unassignedTeams.length > 0 && (
+            <div className="rounded-2xl border border-dashed border-border p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider">미배치</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {unassignedTeams.map(team => (
+                  <Link
+                    key={team.id}
+                    href={`/teams/${team.id}`}
+                    className="p-4 rounded-xl border border-border bg-card hover:border-primary/30 transition-colors"
+                  >
+                    <h4 className="text-sm font-semibold">{team.name}</h4>
+                    <p className="text-xs text-muted-foreground mt-1">팀장: {team.leader} · {team.memberCount}명</p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      ) : agents.length === 0 ? (
-        <div
-          className="text-center py-24 rounded-2xl"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
-        >
-          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: 'var(--accent-soft)' }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.22 4.22l2.83 2.83m9.9 9.9l2.83 2.83M1 12h4m14 0h4M4.22 19.78l2.83-2.83m9.9-9.9l2.83-2.83"/>
-            </svg>
+      </section>
+    </div>
+  );
+}
+
+function CampBlock({ camp }: { camp: CampHierarchy }) {
+  const totalMembers = camp.teams.reduce((sum, t) => sum + t.memberCount, 0);
+  const totalTasks = camp.teams.reduce(
+    (sum, t) => sum + t.members.reduce((s, m) => s + m.total_tasks, 0), 0
+  );
+
+  return (
+    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+      {/* Camp header */}
+      <Link
+        href={`/camps/${camp.id}`}
+        className="flex items-center justify-between px-6 py-4 border-b border-border hover:bg-accent/30 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center">
+            <Cpu size={18} className="text-violet-500" />
           </div>
-          <p className="font-medium mb-1">등록된 에이전트가 없습니다</p>
-          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>MCP 또는 API를 통해 에이전트를 등록하세요</p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-foreground">{camp.name}</h3>
+              {camp.always_on ? (
+                <span className="flex items-center gap-1 text-[10px] text-emerald-500 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  상시
+                </span>
+              ) : (
+                <span className="text-[10px] text-muted-foreground font-medium">수동</span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">{camp.machine}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <span>{camp.teams.length}팀</span>
+          <span>{totalMembers}명</span>
+          {totalTasks > 0 && <span>{totalTasks}건 완료</span>}
+          <ChevronRight size={14} className="text-muted-foreground/40" />
+        </div>
+      </Link>
+
+      {/* Teams under this camp */}
+      {camp.teams.length > 0 ? (
+        <div className="divide-y divide-border">
+          {camp.teams.map(team => (
+            <div key={team.id} className="px-6 py-4">
+              <Link
+                href={`/teams/${team.id}`}
+                className="flex items-center justify-between mb-3 group"
+              >
+                <div className="flex items-center gap-2">
+                  <Users size={14} className="text-emerald-500" />
+                  <h4 className="text-sm font-semibold group-hover:text-primary transition-colors">{team.name}</h4>
+                  <span className="text-[11px] text-muted-foreground/50">{team.description}</span>
+                </div>
+                <ChevronRight size={12} className="text-muted-foreground/30 group-hover:text-primary transition-colors" />
+              </Link>
+
+              {/* Members */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 ml-5">
+                {team.members.map(member => (
+                  <Link
+                    key={member.name}
+                    href={`/members/${member.name}`}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-accent/50 transition-colors"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-blue-500/10 flex items-center justify-center text-[11px] font-bold text-blue-500">
+                      {member.name[0]}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[13px] font-medium truncate">{member.name}</span>
+                        {member.is_leader && (
+                          <Crown size={10} className="text-amber-500 shrink-0" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/50">
+                        <span>{member.role}</span>
+                        {member.total_tasks > 0 && (
+                          <>
+                            <span className="opacity-40">·</span>
+                            <span>{member.total_tasks}건</span>
+                          </>
+                        )}
+                        {member.learnedCount > 0 && (
+                          <>
+                            <span className="opacity-40">·</span>
+                            <span className="text-amber-500">{member.learnedCount}규칙</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
-        <div className="space-y-8">
-          {online.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-4">
-                <span className="w-2 h-2 rounded-full animate-pulse-dot" style={{ background: 'var(--green)' }} />
-                <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--green)' }}>
-                  온라인 ({online.length})
-                </h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {online.map(a => <AgentCard key={a.id} agent={a} lastMessage={lastMessages[a.id]} />)}
-              </div>
-            </section>
-          )}
-          {offline.length > 0 && (
-            <section>
-              <h2 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--text-tertiary)' }}>
-                오프라인 ({offline.length})
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {offline.map(a => <AgentCard key={a.id} agent={a} lastMessage={lastMessages[a.id]} />)}
-              </div>
-            </section>
-          )}
+        <div className="px-6 py-8 text-center">
+          <p className="text-sm text-muted-foreground/50">배치된 팀이 없습니다</p>
         </div>
       )}
     </div>
+  );
+}
+
+function StatCard({ label, value, icon, href, color }: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  href: string;
+  color: string;
+}) {
+  const colorMap: Record<string, string> = {
+    emerald: 'bg-emerald-500/10 text-emerald-500',
+    blue: 'bg-blue-500/10 text-blue-500',
+    violet: 'bg-violet-500/10 text-violet-500',
+    amber: 'bg-amber-500/10 text-amber-500',
+  };
+
+  return (
+    <Link
+      href={href}
+      className="p-5 rounded-2xl border border-border bg-card hover:border-primary/30 transition-colors"
+    >
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${colorMap[color]}`}>
+        {icon}
+      </div>
+      <p className="text-2xl font-bold text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </Link>
   );
 }

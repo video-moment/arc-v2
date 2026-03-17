@@ -1,0 +1,5 @@
+id: vimo
+name: VIMO
+machine: "iMac"
+always_on: true
+description: "비모 업무 주력 캠프"

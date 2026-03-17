@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import type { NoteCategory, NotePage } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { FileText, ArrowLeft } from 'lucide-react';
+import NoteIcon from './NoteIcon';
 
 interface GroupWithPages {
   id: string;
@@ -17,7 +20,7 @@ interface NoteDashboardProps {
 }
 
 export default function NoteDashboard({ groups, categories, onSelectPage }: NoteDashboardProps) {
-  const [selectedCatId, setSelectedCatId] = useState<string | null>(null); // null = 대시보드, 'uncategorized' = 미분류
+  const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
 
   type PageWithGroup = NotePage & { groupName: string; groupEmoji: string };
 
@@ -25,32 +28,12 @@ export default function NoteDashboard({ groups, categories, onSelectPage }: Note
     return groups.flatMap(g => g.pages.map(p => ({ ...p, groupName: g.name, groupEmoji: g.emoji })));
   }, [groups]);
 
-  const totalPages = allPages.length;
-
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayPages = allPages.filter(p => new Date(p.updatedAt) >= todayStart);
-
-  // 최근 수정 8개
   const recentPages = useMemo(() => {
     return [...allPages]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 8);
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }, [allPages]);
 
-  // 카테고리별 분류
-  const categoryPages = useMemo(() => {
-    return categories.map(cat => ({
-      ...cat,
-      pages: allPages
-        .filter(p => p.categoryId === cat.id)
-        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-        .slice(0, 4),
-      total: allPages.filter(p => p.categoryId === cat.id).length,
-    }));
-  }, [categories, allPages]);
-
-  const uncategorizedCount = allPages.filter(p => !p.categoryId).length;
+  const now = new Date();
 
   const relativeTime = (dateStr: string) => {
     const diff = now.getTime() - new Date(dateStr).getTime();
@@ -65,8 +48,7 @@ export default function NoteDashboard({ groups, categories, onSelectPage }: Note
   };
 
   const getPreview = (content: string) => {
-    if (!content) return '내용 없음';
-    // 마크다운 문법 제거하여 순수 텍스트 추출
+    if (!content) return '';
     const text = content
       .replace(/^#{1,6}\s+/gm, '')
       .replace(/\*\*([^*]+)\*\*/g, '$1')
@@ -78,25 +60,25 @@ export default function NoteDashboard({ groups, categories, onSelectPage }: Note
       .replace(/`{1,3}[^`]*`{1,3}/g, '')
       .replace(/\n+/g, ' ')
       .trim();
-    return text.length > 120 ? text.slice(0, 120) + '...' : text;
+    return text.length > 150 ? text.slice(0, 150) + '...' : text;
   };
 
-  if (totalPages === 0) {
+  // Empty state
+  if (allPages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--text-tertiary)' }}>
-        <div className="text-center">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="mx-auto mb-4 opacity-30">
-            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-            <polyline points="14 2 14 8 20 8" />
-          </svg>
-          <p className="text-sm mb-1">노트가 아직 없습니다</p>
-          <p className="text-sm">왼쪽에서 그룹을 만들어 시작하세요</p>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center px-8">
+          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center bg-accent/50">
+            <FileText className="w-7 h-7 text-muted-foreground/30" strokeWidth={1.5} />
+          </div>
+          <p className="text-sm font-medium text-muted-foreground mb-1">아직 노트가 없어요</p>
+          <p className="text-xs text-muted-foreground/50">왼쪽에서 그룹을 만들고 노트를 작성하세요</p>
         </div>
       </div>
     );
   }
 
-  // 카테고리 상세 뷰
+  // Category detail
   if (selectedCatId !== null) {
     const isUncategorized = selectedCatId === 'uncategorized';
     const cat = isUncategorized ? null : categories.find(c => c.id === selectedCatId);
@@ -107,260 +89,113 @@ export default function NoteDashboard({ groups, categories, onSelectPage }: Note
 
     return (
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-8 py-8">
-          {/* 뒤로가기 헤더 */}
+        <div className="max-w-2xl mx-auto px-8 py-10">
           <button
             onClick={() => setSelectedCatId(null)}
-            className="flex items-center gap-2 mb-6 text-sm transition-colors cursor-pointer"
-            style={{ color: 'var(--text-tertiary)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+            className="flex items-center gap-1.5 mb-8 text-xs text-muted-foreground/50 hover:text-foreground transition-colors"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            대시보드로 돌아가기
+            <ArrowLeft className="w-3.5 h-3.5" />
+            돌아가기
           </button>
 
-          {/* 카테고리 제목 */}
-          <div className="flex items-center gap-3 mb-6">
-            <span
-              className="w-4 h-4 rounded-full"
-              style={{ background: cat?.color ?? 'var(--text-tertiary)' }}
-            />
-            <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-              {isUncategorized ? '미분류' : cat?.name}
-            </h1>
-            <span className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
-              {sorted.length}개 노트
-            </span>
+          <div className="flex items-center gap-3 mb-8">
+            <span className="w-3 h-3 rounded-full" style={{ background: cat?.color ?? 'var(--text-tertiary)' }} />
+            <h1 className="text-lg font-bold">{isUncategorized ? '미분류' : cat?.name}</h1>
+            <span className="text-xs text-muted-foreground/50">{sorted.length}개</span>
           </div>
 
-          {/* 노트 목록 */}
-          {sorted.length === 0 ? (
-            <p className="text-sm py-12 text-center" style={{ color: 'var(--text-tertiary)' }}>
-              이 카테고리에 노트가 없습니다
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {sorted.map(p => (
-                <div
-                  key={p.id}
-                  className="flex items-center gap-4 px-5 py-4 rounded-xl cursor-pointer transition-all"
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-subtle)',
-                  }}
-                  onClick={() => onSelectPage(p)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--accent)';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                    e.currentTarget.style.transform = 'none';
-                  }}
-                >
-                  <span className="text-xl flex-shrink-0">{p.emoji}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                      {p.title}
-                    </p>
-                    <p
-                      className="text-xs mt-1 leading-relaxed"
-                      style={{
-                        color: 'var(--text-tertiary)',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 1,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {getPreview(p.content)}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end flex-shrink-0 gap-1">
-                    <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                      {p.groupEmoji} {p.groupName}
-                    </span>
-                    <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                      {relativeTime(p.updatedAt)}
-                    </span>
-                  </div>
+          <div className="space-y-1">
+            {sorted.map(p => (
+              <div
+                key={p.id}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer hover:bg-accent/50 transition-colors"
+                onClick={() => onSelectPage(p)}
+              >
+                <NoteIcon name={p.emoji} size={16} className="text-muted-foreground/60" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{p.title}</p>
+                  <p className="text-xs text-muted-foreground/50 truncate mt-0.5">{getPreview(p.content)}</p>
                 </div>
-              ))}
-            </div>
-          )}
+                <span className="text-[11px] text-muted-foreground/40 shrink-0">{relativeTime(p.updatedAt)}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
   }
 
+  // Main dashboard — clean recent list
+  const uncategorizedCount = allPages.filter(p => !p.categoryId).length;
+
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-8 py-8">
+    <div className="flex-1 overflow-y-auto bg-muted/40">
+      <div className="max-w-2xl mx-auto px-8 py-10">
 
-        {/* 상단 통계 */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div
-            className="rounded-xl px-5 py-4"
-            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}
-          >
-            <p className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{totalPages}</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>전체 노트</p>
-          </div>
-          <div
-            className="rounded-xl px-5 py-4"
-            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}
-          >
-            <p className="text-2xl font-bold" style={{ color: 'var(--accent-hover)' }}>{todayPages.length}</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>오늘 활동</p>
-          </div>
-          <div
-            className="rounded-xl px-5 py-4"
-            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}
-          >
-            <p className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{groups.length}</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>그룹</p>
-          </div>
-        </div>
-
-        {/* 카테고리 블록 */}
+        {/* Category pills */}
         {categories.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>카테고리</h2>
-            <div className="grid grid-cols-3 gap-3">
-              {categoryPages.map(cat => (
+          <div className="flex flex-wrap items-center gap-2 mb-8">
+            {categories.map(cat => {
+              const count = allPages.filter(p => p.categoryId === cat.id).length;
+              return (
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCatId(cat.id)}
-                  className="rounded-xl px-5 py-5 text-left cursor-pointer transition-all"
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-subtle)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = cat.color;
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                    e.currentTarget.style.transform = 'none';
-                  }}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl border bg-card hover:bg-accent/50 transition-colors"
                 >
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="w-3.5 h-3.5 rounded-full" style={{ background: cat.color }} />
-                    <span className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
-                    <span className="flex-1" />
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-tertiary)' }}>
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </div>
-                  <p className="text-2xl font-bold mb-1" style={{ color: cat.total > 0 ? cat.color : 'var(--text-tertiary)' }}>
-                    {cat.total}
-                  </p>
-                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    {cat.total > 0 ? `최근: ${cat.pages[0]?.title ?? ''}` : '노트 없음'}
-                  </p>
+                  <span className="w-2 h-2 rounded-full" style={{ background: cat.color }} />
+                  <span className="text-[13px] font-medium">{cat.name}</span>
+                  <span className="text-[11px] text-muted-foreground/40 tabular-nums">{count}</span>
                 </button>
-              ))}
-              {uncategorizedCount > 0 && (
-                <button
-                  onClick={() => setSelectedCatId('uncategorized')}
-                  className="rounded-xl px-5 py-5 text-left cursor-pointer transition-all"
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-subtle)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--text-tertiary)';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                    e.currentTarget.style.transform = 'none';
-                  }}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="w-3.5 h-3.5 rounded-full" style={{ background: 'var(--text-tertiary)', opacity: 0.4 }} />
-                    <span className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>미분류</span>
-                    <span className="flex-1" />
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-tertiary)' }}>
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </div>
-                  <p className="text-2xl font-bold mb-1" style={{ color: 'var(--text-tertiary)' }}>
-                    {uncategorizedCount}
-                  </p>
-                  <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>카테고리 미지정</p>
-                </button>
-              )}
-            </div>
+              );
+            })}
+            {uncategorizedCount > 0 && (
+              <button
+                onClick={() => setSelectedCatId('uncategorized')}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-xl border bg-card hover:bg-accent/50 transition-colors"
+              >
+                <span className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                <span className="text-[13px] font-medium">미분류</span>
+                <span className="text-[11px] text-muted-foreground/40 tabular-nums">{uncategorizedCount}</span>
+              </button>
+            )}
           </div>
         )}
 
-        {/* 최근 노트 카드 그리드 */}
-        <div className="mb-8">
-          <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>최근 노트</h2>
-          <div className="grid grid-cols-2 gap-3">
+        {/* Recent notes */}
+        <div>
+          <h2 className="text-xs font-medium text-muted-foreground/40 uppercase tracking-wider mb-3">
+            최근 수정
+          </h2>
+          <div className="space-y-2">
             {recentPages.map(p => {
               const cat = categories.find(c => c.id === p.categoryId);
               return (
                 <div
                   key={p.id}
-                  className="rounded-xl px-5 py-4 cursor-pointer transition-all"
-                  style={{
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-subtle)',
-                  }}
+                  className="group px-5 py-4 rounded-xl bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all"
                   onClick={() => onSelectPage(p)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--accent)';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                    e.currentTarget.style.transform = 'none';
-                  }}
                 >
-                  {/* 상단: 이모지 + 제목 */}
-                  <div className="flex items-start gap-2 mb-2">
-                    <span className="text-lg flex-shrink-0">{p.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                        {p.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {cat && (
-                          <span className="flex items-center gap-1 text-[11px]" style={{ color: cat.color }}>
-                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: cat.color }} />
-                            {cat.name}
-                          </span>
-                        )}
-                        <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                          {p.groupEmoji} {p.groupName}
-                        </span>
-                      </div>
-                    </div>
+                  <p className="text-[14px] font-semibold text-foreground truncate mb-1">{p.title}</p>
+                  <p className="text-[12.5px] text-muted-foreground/70 leading-[1.6] line-clamp-2 mb-2">
+                    {getPreview(p.content) || '내용 없음'}
+                  </p>
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground/50">
+                    <span className="flex items-center gap-1"><NoteIcon name={p.groupEmoji} size={10} /> {p.groupName}</span>
+                    <span className="opacity-30">·</span>
+                    <span className="tabular-nums">{relativeTime(p.updatedAt)}</span>
+                    {cat && (
+                      <>
+                        <span className="opacity-30">·</span>
+                        <span style={{ color: cat.color }}>{cat.name}</span>
+                      </>
+                    )}
                   </div>
-                  {/* 미리보기 */}
-                  <p
-                    className="text-xs leading-relaxed mb-2"
-                    style={{ color: 'var(--text-tertiary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-                  >
-                    {getPreview(p.content)}
-                  </p>
-                  {/* 하단: 시간 */}
-                  <p className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-                    {relativeTime(p.updatedAt)}
-                  </p>
                 </div>
               );
             })}
           </div>
         </div>
-
-
       </div>
     </div>
   );

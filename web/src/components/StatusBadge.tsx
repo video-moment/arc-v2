@@ -1,37 +1,36 @@
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+
 interface Props {
   status: string;
   size?: 'sm' | 'md';
 }
 
-const CONFIG: Record<string, { bg: string; color: string; label: string }> = {
-  online:      { bg: 'var(--green-soft)',  color: 'var(--green)',          label: '온라인' },
-  offline:     { bg: 'rgba(113,113,122,0.12)', color: 'var(--text-tertiary)', label: '오프라인' },
-  error:       { bg: 'var(--red-soft)',    color: 'var(--red)',            label: '오류' },
-  active:      { bg: 'var(--green-soft)',  color: 'var(--green)',          label: '활성' },
-  archived:    { bg: 'rgba(113,113,122,0.12)', color: 'var(--text-tertiary)', label: '보관됨' },
-  pending:     { bg: 'var(--yellow-soft)', color: 'var(--yellow)',         label: '대기' },
-  in_progress: { bg: 'var(--blue-soft)',   color: 'var(--blue)',           label: '진행중' },
-  completed:   { bg: 'var(--green-soft)',  color: 'var(--green)',          label: '완료' },
-  failed:      { bg: 'var(--red-soft)',    color: 'var(--red)',            label: '실패' },
+const CONFIG: Record<string, { dotClass: string; textClass: string; bgClass: string; label: string }> = {
+  online:      { dotClass: 'bg-emerald-500 animate-pulse-dot', textClass: 'text-emerald-600',          bgClass: 'bg-emerald-500/10 border-emerald-500/20', label: '온라인' },
+  offline:     { dotClass: 'bg-muted-foreground/50',           textClass: 'text-muted-foreground',      bgClass: 'bg-muted border-border',                 label: '오프라인' },
+  error:       { dotClass: 'bg-destructive',                   textClass: 'text-destructive',           bgClass: 'bg-destructive/10 border-destructive/20', label: '오류' },
+  active:      { dotClass: 'bg-emerald-500 animate-pulse-dot', textClass: 'text-emerald-600',           bgClass: 'bg-emerald-500/10 border-emerald-500/20', label: '활성' },
+  archived:    { dotClass: 'bg-muted-foreground/50',           textClass: 'text-muted-foreground',      bgClass: 'bg-muted border-border',                 label: '보관됨' },
+  pending:     { dotClass: 'bg-yellow-500',                    textClass: 'text-yellow-600',            bgClass: 'bg-yellow-500/10 border-yellow-500/20',   label: '대기' },
+  in_progress: { dotClass: 'bg-blue-500',                      textClass: 'text-blue-600',              bgClass: 'bg-blue-500/10 border-blue-500/20',       label: '진행중' },
+  completed:   { dotClass: 'bg-emerald-500',                   textClass: 'text-emerald-600',           bgClass: 'bg-emerald-500/10 border-emerald-500/20', label: '완료' },
+  failed:      { dotClass: 'bg-destructive',                   textClass: 'text-destructive',           bgClass: 'bg-destructive/10 border-destructive/20', label: '실패' },
 };
 
 export default function StatusBadge({ status, size = 'sm' }: Props) {
   const c = CONFIG[status] || CONFIG.offline;
-  const isOnline = status === 'online';
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full font-medium ${
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full border font-medium',
+        c.bgClass,
+        c.textClass,
         size === 'sm' ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'
-      }`}
-      style={{ background: c.bg, color: c.color }}
+      )}
     >
-      <span
-        className={`rounded-full ${isOnline ? 'animate-pulse-dot' : ''} ${
-          size === 'sm' ? 'w-1.5 h-1.5' : 'w-2 h-2'
-        }`}
-        style={{ background: c.color }}
-      />
+      <span className={cn('rounded-full flex-shrink-0', c.dotClass, size === 'sm' ? 'w-1.5 h-1.5' : 'w-2 h-2')} />
       {c.label}
     </span>
   );

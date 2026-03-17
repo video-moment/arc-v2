@@ -19,7 +19,6 @@ import {
   type NotePage,
 } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import { useSidebar } from '@/components/SidebarContext';
 import SidePanel from '@/components/notes/SidePanel';
 import NoteEditor from '@/components/notes/NoteEditor';
 import NoteDashboard from '@/components/notes/NoteDashboard';
@@ -38,18 +37,9 @@ export default function NotesPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
+  const [sidePanelHidden, setSidePanelHidden] = useState(false);
 
-  // ── 노트 진입 시 글로벌 사이드바 자동 접기, 나갈 때 복원 ──
-  const { collapsed, collapse, expand } = useSidebar();
-  const wasCollapsedRef = useRef(collapsed);
-  useEffect(() => {
-    wasCollapsedRef.current = collapsed;
-    collapse();
-    return () => {
-      if (!wasCollapsedRef.current) expand();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // 글로벌 사이드바는 Sidebar.tsx에서 /notes 경로 시 자동 숨김
 
   // ── Data loading ──
   const loadData = useCallback(async () => {
@@ -182,6 +172,24 @@ export default function NotesPage() {
     loadData();
   };
 
+  // ── Emoji change ──
+  const handleChangeGroupEmoji = async (id: string, emoji: string) => {
+    await updateNoteGroup(id, { emoji });
+    loadData();
+  };
+
+  const handleChangePageEmoji = async (id: string, emoji: string) => {
+    await updateNotePage(id, { emoji });
+    if (selectedPage?.id === id) setSelectedPage(prev => prev ? { ...prev, emoji } : null);
+    loadData();
+  };
+
+  // ── Move page to another group ──
+  const handleMovePage = async (pageId: string, targetGroupId: string) => {
+    await updateNotePage(pageId, { groupId: targetGroupId });
+    loadData();
+  };
+
   // ── Category CRUD ──
   const handleCreateCategory = async (name: string, color: string) => {
     await createNoteCategory(name, color);
@@ -271,7 +279,11 @@ export default function NotesPage() {
   }
 
   return (
-    <div className="flex -m-8" style={{ background: 'var(--bg-primary)', height: 'calc(100vh)' }}>
+    <div className="flex h-screen bg-background">
+      <div
+        className="shrink-0 transition-all duration-300 overflow-hidden"
+        style={{ width: sidePanelHidden ? 0 : undefined }}
+      >
       <SidePanel
         groups={filteredGroups}
         selectedPageId={selectedPage?.id ?? null}
@@ -285,6 +297,9 @@ export default function NotesPage() {
         onTogglePin={handleTogglePin}
         onReorderGroups={handleReorderGroups}
         onReorderPages={handleReorderPages}
+        onChangeGroupEmoji={handleChangeGroupEmoji}
+        onChangePageEmoji={handleChangePageEmoji}
+        onMovePage={handleMovePage}
         categories={categories}
         selectedCategoryId={selectedCategoryId}
         onSelectCategory={setSelectedCategoryId}
@@ -292,6 +307,7 @@ export default function NotesPage() {
         onRenameCategory={handleRenameCategory}
         onDeleteCategory={handleDeleteCategory}
       />
+      </div>
       <div className="flex-1 min-w-0">
         {selectedPage ? (
           <NoteEditor
@@ -306,6 +322,8 @@ export default function NotesPage() {
             onNavigateToPage={handleNavigateToPage}
             onCategoryChange={handleCategoryChange}
             onGoBack={() => setSelectedPage(null)}
+            sidePanelHidden={sidePanelHidden}
+            onToggleSidePanel={() => setSidePanelHidden(prev => !prev)}
           />
         ) : (
           <NoteDashboard

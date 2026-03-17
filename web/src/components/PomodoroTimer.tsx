@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { PomoTask } from '@/lib/api';
-import { TargetIcon, TomatoIcon, SettingsIcon, ZapIcon } from './Icons';
+import { TomatoIcon, SettingsIcon } from './Icons';
 
 export interface PomodoroDurations {
   work: number;
@@ -27,7 +27,14 @@ const PHASE_LABELS: Record<Phase, string> = {
   longBreak: '긴 휴식',
 };
 
-export default function PomodoroTimer({ activeTask, onSessionComplete, durations, onDurationsChange, onQuickFocus, isQuickFocus }: Props) {
+export default function PomodoroTimer({
+  activeTask,
+  onSessionComplete,
+  durations,
+  onDurationsChange,
+  onQuickFocus,
+  isQuickFocus,
+}: Props) {
   const durationsInSeconds: Record<Phase, number> = {
     work: durations.work * 60,
     break: durations.break * 60,
@@ -40,14 +47,22 @@ export default function PomodoroTimer({ activeTask, onSessionComplete, durations
   const [completedSets, setCompletedSets] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   const totalSeconds = durationsInSeconds[phase];
-  const progress = 1 - secondsLeft / totalSeconds;
+  const progress = totalSeconds > 0 ? 1 - secondsLeft / totalSeconds : 0;
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
 
+  const phaseColor =
+    phase === 'work' ? 'var(--accent)' : phase === 'break' ? 'var(--green)' : 'var(--blue)';
+
   const notify = useCallback((title: string, body: string) => {
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+    if (
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      Notification.permission === 'granted'
+    ) {
       new Notification(title, { body });
     }
   }, []);
@@ -103,7 +118,20 @@ export default function PomodoroTimer({ activeTask, onSessionComplete, durations
     if (!isRunning) {
       setSecondsLeft(durationsInSeconds[phase]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [durations.work, durations.break, durations.longBreak]);
+
+  // Close settings when clicking outside
+  useEffect(() => {
+    if (!showSettings) return;
+    const handler = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setShowSettings(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showSettings]);
 
   const handleReset = () => {
     setIsRunning(false);
@@ -116,185 +144,192 @@ export default function PomodoroTimer({ activeTask, onSessionComplete, durations
     onDurationsChange({ ...durations, [key]: value });
   };
 
-  const radius = 110;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference * (1 - progress);
-
-  const phaseColor = phase === 'work' ? 'var(--accent)' : phase === 'break' ? 'var(--green)' : 'var(--blue)';
-  const phaseGlow = phase === 'work'
-    ? 'rgba(139, 92, 246, 0.15)'
-    : phase === 'break'
-      ? 'rgba(16, 185, 129, 0.15)'
-      : 'rgba(59, 130, 246, 0.15)';
+  const canStart = phase !== 'work' || !!activeTask || !!isQuickFocus;
+  const setDisplay = (Math.floor(completedSets % 4)) + (phase === 'work' && isRunning ? 1 : 0);
 
   return (
-    <div className="flex flex-col items-center gap-8">
-      {/* Active task */}
-      {activeTask ? (
-        <div
-          className="px-4 py-2 rounded-xl text-sm flex items-center gap-2"
-          style={{
-            background: 'var(--bg-elevated)',
-            color: 'var(--text-secondary)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-          }}
-        >
-          <TargetIcon size={14} />
-          <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{activeTask.title}</span>
-          <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-tertiary)' }}>
-            <TomatoIcon size={11} /> {activeTask.completedPomodoros}/{activeTask.estimatedPomodoros}
-          </span>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2">
-          <div
-            className="px-4 py-2.5 rounded-xl text-sm flex items-center gap-2"
-            style={{ background: 'var(--bg-elevated)', color: 'var(--text-tertiary)' }}
-          >
-            <TargetIcon size={14} />
-            아래에서 할 일을 클릭하여 타이머에 연결하세요
-          </div>
-          {onQuickFocus && (
-            <button
-              onClick={onQuickFocus}
-              className="px-4 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 transition-all"
-              style={{
-                background: 'linear-gradient(135deg, var(--accent), var(--blue))',
-                color: '#fff',
-                boxShadow: '0 4px 14px rgba(139, 92, 246, 0.25)',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-            >
-              <ZapIcon size={14} />
-              빠른 집중
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Timer circle */}
-      <div className="relative">
-        {/* Glow effect */}
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `radial-gradient(circle, ${phaseGlow} 0%, transparent 70%)`,
-            transform: 'scale(1.2)',
-            transition: 'background 0.5s ease',
-          }}
-        />
-        <svg width="280" height="280" viewBox="0 0 280 280" className="relative">
-          <circle
-            cx="140" cy="140" r={radius}
-            fill="none"
-            stroke="var(--border-subtle)"
-            strokeWidth="8"
-            opacity="0.5"
-          />
-          <circle
-            cx="140" cy="140" r={radius}
-            fill="none"
-            stroke={phaseColor}
-            strokeWidth="8"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            transform="rotate(-90 140 140)"
-            style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          {/* Phase badge */}
+    <div
+      className={isRunning ? 'relative timer-running' : 'relative'}
+      style={{
+        background: 'var(--bg-elevated)',
+        boxShadow: '0 1px 0 var(--border-subtle)',
+      }}
+    >
+      {/* Main mini-bar row */}
+      <div className="flex items-center gap-3 px-4" style={{ height: '52px' }}>
+        {/* Phase badge + time */}
+        <div className="flex items-center gap-2 flex-shrink-0">
           <span
-            className="text-[10px] font-semibold uppercase tracking-widest mb-2 px-3 py-1 rounded-full"
+            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
             style={{
               color: phaseColor,
-              background: phaseGlow,
+              background: phase === 'work'
+                ? 'var(--accent-soft)'
+                : phase === 'break'
+                ? 'var(--green-soft)'
+                : 'var(--blue-soft)',
             }}
           >
             {PHASE_LABELS[phase]}
           </span>
-          <span className="text-6xl font-bold tabular-nums" style={{ color: 'var(--text-primary)' }}>
+          <span
+            className="text-2xl font-bold tabular-nums"
+            style={{ color: 'var(--text-primary)', letterSpacing: '-1px', minWidth: '58px' }}
+          >
             {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
           </span>
-          <span className="text-xs mt-1.5" style={{ color: 'var(--text-tertiary)' }}>
-            세트 {Math.floor(completedSets % 4) + (phase === 'work' && isRunning ? 1 : 0)} / 4
-          </span>
+        </div>
+
+        {/* Progress bar — fills available space */}
+        <div
+          className="flex-1 rounded-full overflow-hidden"
+          style={{ height: '3px', background: 'var(--border-subtle)' }}
+        >
+          <div
+            className={isRunning ? 'h-full rounded-full progress-active' : 'h-full rounded-full'}
+            style={{
+              width: (progress * 100) + '%',
+              background: phaseColor,
+              transition: 'width 0.5s linear',
+            }}
+          />
+        </div>
+
+        {/* Active task info */}
+        {activeTask && (
+          <div
+            className="flex-shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-md text-xs"
+            style={{
+              background: 'var(--bg-secondary)',
+              color: 'var(--text-secondary)',
+              maxWidth: '160px',
+            }}
+          >
+            <span className="truncate" style={{ color: 'var(--text-primary)', fontSize: '11px' }}>
+              {activeTask.title}
+            </span>
+            <span className="flex items-center gap-0.5 flex-shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+              <TomatoIcon size={9} />
+              <span style={{ fontSize: '10px' }}>{activeTask.completedPomodoros}/{activeTask.estimatedPomodoros}</span>
+            </span>
+          </div>
+        )}
+
+        {/* Set counter */}
+        <span
+          className="flex-shrink-0 text-[11px] tabular-nums"
+          style={{ color: 'var(--text-tertiary)', minWidth: '28px', textAlign: 'center' }}
+        >
+          {setDisplay}/4
+        </span>
+
+        {/* Controls */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Start / Pause — accent filled when idle, outline when running */}
+          <button
+            onClick={() => setIsRunning(!isRunning)}
+            disabled={!canStart}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all"
+            style={{
+              background: isRunning ? 'transparent' : canStart ? 'var(--accent)' : 'var(--bg-secondary)',
+              color: isRunning ? 'var(--accent)' : canStart ? '#fff' : 'var(--text-tertiary)',
+              border: isRunning ? '1px solid var(--accent)' : '1px solid transparent',
+              opacity: !canStart ? 0.4 : 1,
+              cursor: !canStart ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {isRunning ? (
+              <>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                일시정지
+              </>
+            ) : (
+              <>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                시작
+              </>
+            )}
+          </button>
+
+          {/* Reset */}
+          <button
+            onClick={handleReset}
+            className="px-2 py-1.5 rounded-md text-xs transition-all"
+            style={{
+              background: 'transparent',
+              color: 'var(--text-tertiary)',
+            }}
+            title="리셋"
+          >
+            리셋
+          </button>
+
+          {/* Quick Focus (no active task) */}
+          {!activeTask && !isQuickFocus && onQuickFocus && (
+            <button
+              onClick={onQuickFocus}
+              className="p-1.5 rounded-md transition-all"
+              style={{
+                background: 'linear-gradient(135deg, var(--accent), var(--blue))',
+                color: '#fff',
+              }}
+              title="빠른 집중"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </button>
+          )}
+
+          {/* Settings gear */}
+          <button
+            onClick={() => setShowSettings(s => !s)}
+            className="p-1.5 rounded-md transition-all"
+            style={{
+              background: showSettings ? 'var(--accent-soft)' : 'transparent',
+              color: showSettings ? 'var(--accent-hover)' : 'var(--text-tertiary)',
+            }}
+            title="시간 설정"
+          >
+            <SettingsIcon size={14} />
+          </button>
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => setIsRunning(!isRunning)}
-          className="px-8 py-3 rounded-xl text-sm font-medium transition-all duration-200"
-          style={{
-            background: isRunning ? 'var(--red-soft)' : 'var(--accent)',
-            color: isRunning ? 'var(--red)' : '#fff',
-            boxShadow: isRunning ? 'none' : '0 4px 14px rgba(139, 92, 246, 0.25)',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-          disabled={phase === 'work' && !activeTask && !isQuickFocus}
-        >
-          {isRunning ? '일시정지' : '시작'}
-        </button>
-        <button
-          onClick={handleReset}
-          className="px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200"
-          style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
-        >
-          리셋
-        </button>
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className="p-3 rounded-xl transition-all duration-200"
-          style={{
-            background: showSettings ? 'var(--accent-soft)' : 'var(--bg-elevated)',
-            color: showSettings ? 'var(--accent-hover)' : 'var(--text-secondary)',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.03)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-          title="시간 설정"
-        >
-          <SettingsIcon size={18} />
-        </button>
-      </div>
-
-      {/* Settings panel */}
+      {/* Settings dropdown */}
       {showSettings && (
         <div
-          className="w-full max-w-sm rounded-xl p-5 space-y-4"
+          ref={settingsRef}
+          className="absolute right-4 top-full mt-1 z-50 rounded-xl p-4 space-y-3"
           style={{
-            background: 'var(--bg-card, var(--bg-elevated))',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+            background: 'var(--bg-elevated)',
             border: '1px solid var(--border-subtle)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+            minWidth: '240px',
           }}
         >
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
               시간 설정
-            </h4>
+            </span>
             {isRunning && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'var(--yellow-soft)', color: 'var(--yellow)' }}>
-                타이머 정지 후 변경 가능
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full"
+                style={{ background: 'var(--yellow-soft)', color: 'var(--yellow)' }}
+              >
+                정지 후 변경 가능
               </span>
             )}
           </div>
-          {[
-            { key: 'work' as const, label: '집중 시간', min: 1, max: 60, color: 'var(--accent)' },
-            { key: 'break' as const, label: '휴식 시간', min: 1, max: 30, color: 'var(--green)' },
+          {([
+            { key: 'work' as const, label: '집중', min: 1, max: 60, color: 'var(--accent)' },
+            { key: 'break' as const, label: '휴식', min: 1, max: 30, color: 'var(--green)' },
             { key: 'longBreak' as const, label: '긴 휴식', min: 1, max: 60, color: 'var(--blue)' },
-          ].map(({ key, label, min, max, color }) => (
+          ] as const).map(({ key, label, min, max, color }) => (
             <div key={key} className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full" style={{ background: color }} />
-                <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{label}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   min={min}
@@ -305,7 +340,7 @@ export default function PomodoroTimer({ activeTask, onSessionComplete, durations
                     handleDurationChange(key, v);
                   }}
                   disabled={isRunning}
-                  className="w-16 px-2 py-1.5 rounded-lg text-xs text-center outline-none tabular-nums"
+                  className="w-14 px-2 py-1 rounded-lg text-xs text-center outline-none tabular-nums"
                   style={{
                     background: 'var(--bg-input)',
                     color: 'var(--text-primary)',

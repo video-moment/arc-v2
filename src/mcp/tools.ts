@@ -8,7 +8,7 @@ export type McpDeps = {
 export const TOOL_DEFINITIONS = [
   {
     name: 'arc_register_agent',
-    description: 'Register or update an external agent in the ARC monitoring dashboard. ARC는 당신의 활동을 모니터링하는 대시보드입니다. 등록 후 arc_update_profile로 페르소나, 지침, 능력 등을 업로드하세요. arc_heartbeat로 주기적으로 상태를 보고하고, arc_push_message로 중요한 대화를 기록하세요.',
+    description: 'Register or update an external agent in the ARC monitoring dashboard. ARC는 당신의 활동을 모니터링하는 대시보드입니다. 등록 후 arc_get_system_instructions로 전역 지침을 확인하고, arc_update_profile로 페르소나, 지침, 능력 등을 업로드하세요. arc_heartbeat로 주기적으로 상태를 보고하고, arc_push_message로 중요한 대화를 기록하세요.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -303,6 +303,73 @@ export const TOOL_DEFINITIONS = [
     },
   },
 
+  // ── 댓글 ──────────────────────────────────────────
+  {
+    name: 'arc_comment_insight',
+    description: '인사이트에 댓글을 남깁니다. 다른 에이전트의 인사이트에 경험, 보충 정보, 의견을 공유하세요.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        insightId: { type: 'string', description: 'Insight ID to comment on' },
+        agentId: { type: 'string', description: 'Your agent ID' },
+        content: { type: 'string', description: 'Comment content' },
+      },
+      required: ['insightId', 'agentId', 'content'],
+    },
+  },
+
+  // ── 전역 지침 ──────────────────────────────────────
+  {
+    name: 'arc_get_system_instructions',
+    description: '전역 시스템 지침을 조회합니다. 세션 시작 시 호출하여 봇뮤니티 참여 규칙 등 전역 지침을 로드하세요.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        key: { type: 'string', description: 'Specific instruction key (optional, returns all active if omitted)' },
+      },
+    },
+  },
+
+  // ── Task MCP 연동 ──────────────────────────────────
+  {
+    name: 'arc_report_task_done',
+    description: '에이전트가 할당된 태스크 완료를 보고합니다. 태스크 상태를 completed로 업데이트하고, 요약이 있으면 코멘트로 기록합니다.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        taskId: { type: 'string', description: 'Task ID (UUID)' },
+        agentId: { type: 'string', description: 'Your agent ID' },
+        summary: { type: 'string', description: 'Completion summary (optional)' },
+      },
+      required: ['taskId', 'agentId'],
+    },
+  },
+  {
+    name: 'arc_log_task_progress',
+    description: '태스크 진행 로그를 기록합니다. 태스크가 pending이면 in_progress로 전환하고, 코멘트를 추가합니다.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        taskId: { type: 'string', description: 'Task ID (UUID)' },
+        agentId: { type: 'string', description: 'Your agent ID' },
+        content: { type: 'string', description: 'Progress log content' },
+      },
+      required: ['taskId', 'agentId', 'content'],
+    },
+  },
+  {
+    name: 'arc_get_assigned_tasks',
+    description: '에이전트에게 할당된 태스크 목록을 조회합니다.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        agentId: { type: 'string', description: 'Agent ID to look up' },
+        status: { type: 'string', enum: ['pending', 'in_progress', 'completed'], description: 'Filter by status (optional)' },
+      },
+      required: ['agentId'],
+    },
+  },
+
   {
     name: 'arc_save_feedback',
     description: 'Save quality feedback for learning. Links to domain and optionally to a chat session.',
@@ -355,7 +422,22 @@ export async function handleToolCall(
         .single();
 
       if (error) return text({ error: error.message });
-      return text({ agent: data, registered: true });
+
+      // 등록 후 해당 에이전트의 미완료 태스크 목록 조회
+      const { data: pendingTasks } = await supabase
+        .from('pomo_tasks')
+        .select('*')
+        .eq('assignee_type', 'agent')
+        .eq('assignee_agent_id', id)
+        .neq('status', 'completed')
+        .order('created_at', { ascending: false });
+
+      return text({
+        agent: data,
+        registered: true,
+        pendingTasks: pendingTasks || [],
+        systemNote: '등록 완료! arc_get_system_instructions를 호출하여 전역 지침(봇뮤니티 참여 규칙 등)을 확인하세요.',
+      });
     }
 
     case 'arc_push_message': {
@@ -814,6 +896,45 @@ export async function handleToolCall(
       return text({ directiveId, agentId, acknowledged: true });
     }
 
+    // ── 댓글 ──────────────────────────────────────────
+
+    case 'arc_comment_insight': {
+      const { insightId, agentId, content: commentContent } = args as {
+        insightId: string; agentId: string; content: string;
+      };
+
+      const { data, error } = await supabase
+        .from('insight_comments')
+        .insert({
+          insight_id: insightId,
+          agent_id: agentId,
+          content: commentContent,
+        })
+        .select()
+        .single();
+
+      if (error) return text({ error: error.message });
+      return text({ comment: data, posted: true });
+    }
+
+    // ── 전역 지침 ──────────────────────────────────────
+
+    case 'arc_get_system_instructions': {
+      const { key } = args as { key?: string };
+
+      let query = supabase
+        .from('system_instructions')
+        .select('*')
+        .eq('is_active', true)
+        .order('priority', { ascending: false });
+
+      if (key) query = query.eq('key', key);
+
+      const { data, error } = await query;
+      if (error) return text({ error: error.message });
+      return text({ instructions: data, count: data.length });
+    }
+
     case 'arc_save_feedback': {
       const { domainId, sessionId, feedbackType, category, comment, flaggedExpressions } = args as {
         domainId: string; sessionId?: string; feedbackType: string;
@@ -835,6 +956,97 @@ export async function handleToolCall(
 
       if (error) return text({ error: error.message });
       return text({ feedback: data, saved: true });
+    }
+
+    // ── Task MCP 연동 ──────────────────────────────────
+
+    case 'arc_report_task_done': {
+      const { taskId, agentId, summary } = args as {
+        taskId: string; agentId: string; summary?: string;
+      };
+
+      // 태스크 조회 및 assignee 검증
+      const { data: task, error: fetchErr } = await supabase
+        .from('pomo_tasks')
+        .select('*')
+        .eq('id', taskId)
+        .single();
+
+      if (fetchErr) return text({ error: fetchErr.message });
+      if (!task) return text({ error: `Task not found: ${taskId}` });
+      if (task.assignee_agent_id !== agentId) {
+        return text({ error: `Permission denied: task is not assigned to agent ${agentId}` });
+      }
+
+      // 완료 처리
+      const { data: updated, error: updateErr } = await supabase
+        .from('pomo_tasks')
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('id', taskId)
+        .select()
+        .single();
+
+      if (updateErr) return text({ error: updateErr.message });
+
+      // summary가 있으면 코멘트로 기록
+      if (summary) {
+        await supabase
+          .from('pomo_task_comments')
+          .insert({ task_id: taskId, agent_id: agentId, content: `[완료 보고] ${summary}` });
+      }
+
+      return text({ task: updated, completed: true });
+    }
+
+    case 'arc_log_task_progress': {
+      const { taskId, agentId, content: logContent } = args as {
+        taskId: string; agentId: string; content: string;
+      };
+
+      // 태스크 존재 확인
+      const { data: task, error: fetchErr } = await supabase
+        .from('pomo_tasks')
+        .select('id, status')
+        .eq('id', taskId)
+        .single();
+
+      if (fetchErr) return text({ error: fetchErr.message });
+      if (!task) return text({ error: `Task not found: ${taskId}` });
+
+      // pending이면 in_progress로 전환
+      if (task.status === 'pending') {
+        await supabase
+          .from('pomo_tasks')
+          .update({ status: 'in_progress' })
+          .eq('id', taskId);
+      }
+
+      // 코멘트 삽입
+      const { data: comment, error: insertErr } = await supabase
+        .from('pomo_task_comments')
+        .insert({ task_id: taskId, agent_id: agentId, content: logContent })
+        .select()
+        .single();
+
+      if (insertErr) return text({ error: insertErr.message });
+      return text({ comment, logged: true, statusTransitioned: task.status === 'pending' });
+    }
+
+    case 'arc_get_assigned_tasks': {
+      const { agentId, status } = args as { agentId: string; status?: string };
+
+      let query = supabase
+        .from('pomo_tasks')
+        .select('*')
+        .eq('assignee_type', 'agent')
+        .eq('assignee_agent_id', agentId)
+        .order('created_at', { ascending: false });
+
+      if (status) query = query.eq('status', status);
+
+      const { data, error } = await query;
+      if (error) return text({ error: error.message });
+      return text({ tasks: data, count: data.length, agentId });
     }
 
     default:

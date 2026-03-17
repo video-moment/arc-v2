@@ -1,0 +1,5 @@
+id: hq
+name: HQ
+machine: "MacBook Pro M1 Pro Max"
+always_on: false
+description: "CEO 주력 작업 머신"

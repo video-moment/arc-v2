@@ -11,17 +11,25 @@
     "mcp": "tsx src/mcp/server.ts",
     "build": "tsc",
     "test": "vitest",
-    "bridge:dohwa": "tsx scripts/dohwa-bridge.ts"
+    "bridge:dohwa": "tsx scripts/dohwa-bridge.ts",
+    "chat": "tsx src/cli/chat.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@supabase/supabase-js": "^2.98.0",
+    "@types/multer": "^2.1.0",
     "better-sqlite3": "^11.8.0",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.0",
+    "multer": "^2.1.1",
+    "pdf-parse": "^2.4.5",
     "uuid": "^11.1.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "yaml": "^2.8.2",
+    "youtube-transcript": "^1.2.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",

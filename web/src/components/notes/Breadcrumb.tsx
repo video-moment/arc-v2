@@ -1,3 +1,6 @@
+import { ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
 interface BreadcrumbProps {
   groupEmoji: string;
   groupName: string;
@@ -8,17 +11,19 @@ interface BreadcrumbProps {
 
 export default function Breadcrumb({ groupEmoji, groupName, pageEmoji, pageTitle, onClickGroup }: BreadcrumbProps) {
   return (
-    <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+    <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
       <span
-        className={onClickGroup ? 'cursor-pointer hover:underline' : ''}
+        className={cn(
+          'flex items-center gap-1',
+          onClickGroup && 'cursor-pointer hover:text-foreground transition-colors'
+        )}
         onClick={onClickGroup}
-        style={onClickGroup ? { display: 'inline-flex', alignItems: 'center', gap: 4 } : undefined}
       >
         {groupEmoji} {groupName}
       </span>
-      <span style={{ opacity: 0.5 }}>/</span>
+      <ChevronRight className="w-3 h-3 opacity-40 shrink-0" />
       <span>{pageEmoji}</span>
-      <span className="truncate" style={{ maxWidth: 200 }}>{pageTitle}</span>
+      <span className="truncate max-w-[200px]">{pageTitle}</span>
     </div>
   );
 }

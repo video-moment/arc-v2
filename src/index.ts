@@ -29,7 +29,7 @@ const server = createServer(app);
 setupWebSocket(server, monitor);
 
 server.listen(PORT, () => {
-  console.log(`ARC V2 Monitor running on http://localhost:${PORT}`);
+  console.log(`NextCamp running on http://localhost:${PORT}`);
   console.log(`WebSocket at ws://localhost:${PORT}/ws`);
 });
 

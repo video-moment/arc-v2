@@ -1,15 +1,16 @@
 import type { ChatMessage } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 interface Props {
   status: string;
   lastMessage?: ChatMessage | null;
 }
 
-const ACTIVITY: Record<string, { bg: string; color: string; label: string }> = {
-  active:  { bg: 'var(--blue-soft)',   color: 'var(--blue)',           label: '활동 중' },
-  idle:    { bg: 'rgba(113,113,122,0.08)', color: 'var(--text-tertiary)', label: '대기 중' },
-  offline: { bg: 'rgba(113,113,122,0.08)', color: 'var(--text-tertiary)', label: '비활성' },
-  schedule:{ bg: 'var(--yellow-soft)', color: 'var(--yellow)',         label: '스케줄 진행' },
+const ACTIVITY: Record<string, { bgClass: string; textClass: string; label: string }> = {
+  active:   { bgClass: 'bg-blue-500/10',                  textClass: 'text-blue-600',        label: '활동 중' },
+  idle:     { bgClass: 'bg-muted-foreground/8',           textClass: 'text-muted-foreground', label: '대기 중' },
+  offline:  { bgClass: 'bg-muted-foreground/8',           textClass: 'text-muted-foreground', label: '비활성' },
+  schedule: { bgClass: 'bg-yellow-500/10',                textClass: 'text-yellow-600',       label: '스케줄 진행' },
 };
 
 export function getActivity(agentStatus: string, lastMessage?: ChatMessage | null) {
@@ -30,8 +31,11 @@ export default function ActivityBadge({ status, lastMessage }: Props) {
 
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold"
-      style={{ background: activity.bg, color: activity.color }}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold',
+        activity.bgClass,
+        activity.textClass
+      )}
     >
       {activity.label}
     </span>

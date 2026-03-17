@@ -1,23 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import type { PomoTask } from '@/lib/api';
-import { TomatoIcon, CheckIcon, XIcon, EditIcon, CalendarIcon } from './Icons';
+import type { PomoTask, PomoGoal } from '@/lib/api';
+import { CheckIcon, XIcon, EditIcon, CalendarIcon, BotIcon } from './Icons';
+import CustomSelect from '@/components/CustomSelect';
+import CustomDatePicker from '@/components/CustomDatePicker';
 
 interface Props {
   task: PomoTask;
-  isActive: boolean;
-  onSelect: (task: PomoTask) => void;
   onToggleComplete: (task: PomoTask) => void;
   onDelete: (id: string) => void;
   onUpdate?: (id: string, updates: Record<string, any>) => void;
+  goals?: PomoGoal[];
+  agents?: { id: string; name: string }[];
 }
 
-const PRIORITY_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  high: { bg: 'var(--red-soft)', text: 'var(--red)', label: '높음' },
-  medium: { bg: 'var(--yellow-soft)', text: 'var(--yellow)', label: '보통' },
-  low: { bg: 'var(--green-soft)', text: 'var(--green)', label: '낮음' },
-};
+const AGENT_STATUS_CYCLE: Array<PomoTask['status']> = ['pending', 'in_progress', 'completed'];
 
 function formatDueDate(dueDate: string): { text: string; urgent: boolean } {
   const now = new Date();
@@ -39,27 +37,36 @@ function formatDueDate(dueDate: string): { text: string; urgent: boolean } {
   };
 }
 
-export default function TaskItem({ task, isActive, onSelect, onToggleComplete, onDelete, onUpdate }: Props) {
+// Priority dot colors — high=red, medium=yellow, low=hidden
+const PRIORITY_DOT: Record<string, string | null> = {
+  high: 'var(--red)',
+  medium: 'var(--yellow)',
+  low: null,
+};
+
+export default function TaskItem({ task, onToggleComplete, onDelete, onUpdate, goals, agents }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
   const [editPriority, setEditPriority] = useState<string>(task.priority);
-  const [editPomos, setEditPomos] = useState(task.estimatedPomodoros);
   const [editDueDate, setEditDueDate] = useState(task.dueDate || '');
   const [editCategory, setEditCategory] = useState(task.category || '');
+  const [editGoalId, setEditGoalId] = useState(task.goalId || '');
+  const [editAssignee, setEditAssignee] = useState<'me' | 'agent'>(task.assigneeType || 'me');
+  const [editAgentId, setEditAgentId] = useState(task.assigneeAgentId || '');
 
-  const priority = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS.medium;
   const isCompleted = task.status === 'completed';
-  const pomoProgress = task.estimatedPomodoros > 0
-    ? Math.min(task.completedPomodoros / task.estimatedPomodoros, 1)
-    : 0;
+  const priorityDot = PRIORITY_DOT[task.priority] ?? null;
+  const dueDateInfo = task.dueDate ? formatDueDate(task.dueDate) : null;
 
   const handleStartEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
     setEditTitle(task.title);
     setEditPriority(task.priority);
-    setEditPomos(task.estimatedPomodoros);
     setEditDueDate(task.dueDate || '');
     setEditCategory(task.category || '');
+    setEditGoalId(task.goalId || '');
+    setEditAssignee(task.assigneeType || 'me');
+    setEditAgentId(task.assigneeAgentId || '');
     setIsEditing(true);
   };
 
@@ -69,9 +76,11 @@ export default function TaskItem({ task, isActive, onSelect, onToggleComplete, o
     onUpdate(task.id, {
       title: editTitle.trim(),
       priority: editPriority,
-      estimatedPomodoros: editPomos,
       dueDate: editDueDate || null,
       category: editCategory.trim() || null,
+      goalId: editGoalId || null,
+      assigneeType: editAssignee,
+      assigneeAgentId: editAssignee === 'agent' && editAgentId ? editAgentId : null,
     });
     setIsEditing(false);
   };
@@ -81,107 +90,153 @@ export default function TaskItem({ task, isActive, onSelect, onToggleComplete, o
     setIsEditing(false);
   };
 
-  const dueDateInfo = task.dueDate ? formatDueDate(task.dueDate) : null;
+  const handleAgentStatusCycle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onUpdate) return;
+    const currentIdx = AGENT_STATUS_CYCLE.indexOf(task.status);
+    const nextStatus = AGENT_STATUS_CYCLE[(currentIdx + 1) % AGENT_STATUS_CYCLE.length];
+    onUpdate(task.id, { status: nextStatus });
+  };
 
   return (
     <div
-      className="group rounded-lg transition-all duration-150"
+      className="group rounded-md transition-all duration-150"
       style={{
-        background: isActive ? 'var(--accent-soft)' : 'transparent',
-        borderLeft: isActive
-          ? '3px solid var(--accent)'
-          : '3px solid transparent',
-        boxShadow: isActive ? '0 0 12px rgba(139, 92, 246, 0.08)' : 'none',
+        borderLeft: '2px solid transparent',
       }}
     >
       <div
-        className="flex items-center gap-3 px-3 py-2.5 cursor-pointer"
-        onClick={() => !isCompleted && !isEditing && onSelect(task)}
+        className="flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-150"
+        style={{ background: 'transparent', cursor: 'default' }}
         onMouseEnter={e => {
-          if (!isActive && !isEditing) {
-            e.currentTarget.parentElement!.style.background = 'var(--bg-hover, var(--bg-elevated))';
-            e.currentTarget.parentElement!.style.borderLeftColor = 'var(--accent)';
+          if (!isEditing) {
+            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
           }
         }}
         onMouseLeave={e => {
-          if (!isActive && !isEditing) {
-            e.currentTarget.parentElement!.style.background = 'transparent';
-            e.currentTarget.parentElement!.style.borderLeftColor = 'transparent';
+          if (!isEditing) {
+            (e.currentTarget as HTMLElement).style.background = 'transparent';
           }
         }}
       >
-        {/* Checkbox */}
+        {/* Circular checkbox */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleComplete(task); }}
-          className="w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all"
+          className="w-[18px] h-[18px] rounded-full flex items-center justify-center flex-shrink-0 transition-all"
           style={{
-            borderColor: isCompleted ? 'var(--green)' : 'var(--border)',
+            border: isCompleted ? 'none' : '1.5px solid var(--border)',
             background: isCompleted ? 'var(--green)' : 'transparent',
+          }}
+          onMouseEnter={e => {
+            if (!isCompleted) (e.currentTarget as HTMLElement).style.borderColor = 'var(--green)';
+          }}
+          onMouseLeave={e => {
+            if (!isCompleted) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)';
           }}
         >
           {isCompleted && <CheckIcon />}
         </button>
 
         {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          {/* Priority dot */}
+          {priorityDot && !isCompleted && (
+            <div
+              className="flex-shrink-0 w-2 h-2 rounded-full"
+              style={{ background: priorityDot }}
+            />
+          )}
+
+          {/* Title */}
+          <span
+            className="text-sm font-medium truncate"
+            style={{
+              color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)',
+              textDecoration: isCompleted ? 'line-through' : 'none',
+            }}
+          >
+            {task.title}
+          </span>
+
+          {/* Goal tag */}
+          {task.goalId && goals && (() => {
+            const goal = goals.find(g => g.id === task.goalId);
+            if (!goal) return null;
+            return (
+              <span
+                className="flex-shrink-0 flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full"
+                style={{
+                  background: 'var(--bg-secondary)',
+                  color: 'var(--text-tertiary)',
+                  maxWidth: '90px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ background: goal.color || 'var(--accent)', display: 'inline-block' }}
+                />
+                <span className="truncate">{goal.title}</span>
+              </span>
+            );
+          })()}
+
+          {/* Due date */}
+          {dueDateInfo && (
             <span
-              className="text-sm font-medium truncate"
+              className="text-[11px] flex items-center gap-0.5 flex-shrink-0"
               style={{
-                color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)',
-                textDecoration: isCompleted ? 'line-through' : 'none',
+                color: dueDateInfo.urgent ? 'var(--red)' : 'var(--text-tertiary)',
               }}
             >
-              {task.title}
+              <CalendarIcon size={9} />
+              {dueDateInfo.text}
             </span>
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0"
-              style={{ background: priority.bg, color: priority.text }}
-            >
-              {priority.label}
-            </span>
-            {dueDateInfo && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0 flex items-center gap-0.5"
-                style={{
-                  background: dueDateInfo.urgent ? 'var(--red-soft)' : 'rgba(59, 130, 246, 0.1)',
-                  color: dueDateInfo.urgent ? 'var(--red)' : 'var(--blue)',
-                }}
-              >
-                <CalendarIcon size={9} />
-                {dueDateInfo.text}
-              </span>
-            )}
-            {task.category && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0"
-                style={{ background: 'var(--bg-elevated)', color: 'var(--text-tertiary)', border: '1px solid var(--border-subtle)' }}
-              >
-                {task.category}
-              </span>
-            )}
-          </div>
-        </div>
+          )}
 
-        {/* Pomodoro count + mini progress */}
-        <div className="flex-shrink-0 flex items-center gap-2">
-          <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-tertiary)' }}>
-            <TomatoIcon size={12} /> {task.completedPomodoros}/{task.estimatedPomodoros}
-          </span>
-          {task.estimatedPomodoros > 0 && (
-            <div className="w-12 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
-              <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: (pomoProgress * 100) + '%',
-                  background: pomoProgress >= 1 ? 'var(--green)' : 'var(--accent)',
-                }}
-              />
-            </div>
+          {/* Category */}
+          {task.category && (
+            <span
+              className="text-[11px] flex-shrink-0"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
+              {task.category}
+            </span>
+          )}
+
+          {/* Agent badge */}
+          {task.assigneeType === 'agent' && task.assigneeAgentId && (
+            <span
+              className="text-[11px] flex items-center gap-0.5 flex-shrink-0"
+              style={{ color: 'var(--blue)' }}
+            >
+              <BotIcon size={9} />{task.assigneeAgentId}
+            </span>
           )}
         </div>
 
-        {/* Edit button */}
+        {/* Right side: agent status chip only */}
+        {task.assigneeType === 'agent' && (
+          <div className="flex-shrink-0">
+            <button
+              onClick={handleAgentStatusCycle}
+              className="text-[11px] px-2 py-0.5 rounded-full font-medium transition-all"
+              style={
+                task.status === 'completed'
+                  ? { background: 'var(--green-soft)', color: 'var(--green)' }
+                  : task.status === 'in_progress'
+                  ? { background: 'var(--yellow-soft)', color: 'var(--yellow)' }
+                  : { background: 'transparent', color: 'var(--text-tertiary)', border: '1px solid var(--border-subtle)' }
+              }
+            >
+              {task.status === 'completed' ? '완료' : task.status === 'in_progress' ? '진행중' : '대기'}
+            </button>
+          </div>
+        )}
+
+        {/* Edit button — hover only */}
         {onUpdate && !isCompleted && (
           <button
             onClick={handleStartEdit}
@@ -192,13 +247,13 @@ export default function TaskItem({ task, isActive, onSelect, onToggleComplete, o
           </button>
         )}
 
-        {/* Delete */}
+        {/* Delete — hover only */}
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
           className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
           style={{ color: 'var(--text-tertiary)' }}
         >
-          <XIcon size={14} />
+          <XIcon size={13} />
         </button>
       </div>
 
@@ -217,44 +272,57 @@ export default function TaskItem({ task, isActive, onSelect, onToggleComplete, o
             style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
           />
           <div className="flex gap-2 flex-wrap items-center">
-            <select
+            <CustomSelect
+              size="sm"
               value={editPriority}
-              onChange={e => setEditPriority(e.target.value)}
-              className="px-2 py-1.5 rounded-lg text-xs outline-none"
-              style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-            >
-              <option value="high">높음</option>
-              <option value="medium">보통</option>
-              <option value="low">낮음</option>
-            </select>
-            <div className="flex items-center gap-1">
-              <TomatoIcon size={13} />
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={editPomos}
-                onChange={e => setEditPomos(Number(e.target.value))}
-                className="w-12 px-2 py-1.5 rounded-lg text-xs outline-none text-center"
-                style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-              />
-            </div>
-            <div className="flex items-center gap-1">
-              <CalendarIcon size={13} />
-              <input
-                type="date"
-                value={editDueDate}
-                onChange={e => setEditDueDate(e.target.value)}
-                className="px-2 py-1.5 rounded-lg text-xs outline-none"
-                style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-              />
-            </div>
+              options={[
+                { value: 'high', label: '높음', color: 'var(--red)' },
+                { value: 'medium', label: '보통', color: 'var(--yellow)' },
+                { value: 'low', label: '낮음' },
+              ]}
+              onChange={setEditPriority}
+            />
+            <CustomDatePicker
+              size="sm"
+              value={editDueDate}
+              onChange={setEditDueDate}
+              placeholder="날짜"
+            />
             <input
               value={editCategory}
               onChange={e => setEditCategory(e.target.value)}
               placeholder="카테고리"
               className="px-2 py-1.5 rounded-lg text-xs outline-none w-24"
               style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+            />
+            {goals && goals.length > 0 && (
+              <CustomSelect
+                size="sm"
+                value={editGoalId}
+                options={[
+                  { value: '', label: '목표 없음' },
+                  ...goals.map(g => ({ value: g.id, label: g.title, color: g.color })),
+                ]}
+                onChange={setEditGoalId}
+                placeholder="목표"
+              />
+            )}
+            <CustomSelect
+              size="sm"
+              value={editAssignee === 'agent' ? editAgentId : 'me'}
+              options={[
+                { value: 'me', label: '나' },
+                ...(agents ?? []).map(a => ({ value: a.id, label: a.name })),
+              ]}
+              onChange={val => {
+                if (val === 'me') {
+                  setEditAssignee('me');
+                  setEditAgentId('');
+                } else {
+                  setEditAssignee('agent');
+                  setEditAgentId(val);
+                }
+              }}
             />
             <div className="ml-auto flex gap-1.5">
               <button

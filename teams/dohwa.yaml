@@ -1,0 +1,23 @@
+id: dohwa
+name: 도화팀
+description: 일주×MBTI 시나리오 콘텐츠 제작
+workspace: ~/Desktop/ilju-mbti-project
+camp: hq
+
+leader:
+  name: 도화
+  role: writer
+  purpose: "일주×MBTI 기반 시나리오와 콘텐츠를 총괄한다"
+  knowledge:
+    - "사주 일주 60개 × MBTI 16개 조합"
+    - "힉스필드 자동화 연동"
+    - "포트 7777에서 실행"
+
+members:
+  - name: 채원
+    role: writer
+    personality: "감성적이고 몰입도 높은 시나리오를 쓴다"
+
+  - name: 현우
+    role: reviewer
+    personality: "시나리오의 논리적 일관성과 규칙 준수를 검수한다"
