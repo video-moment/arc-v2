@@ -1,12 +1,15 @@
-node_modules/
-dist/
-data/arc.db
-data/arc.db-wal
-data/arc.db-shm
-.arc-tmp/
-.env.local
-.env
 
+.arc-tmp/
+.env
+.env.local
+.next/
+.vercel
+data/arc.db
+data/arc.db-shm
+data/arc.db-wal
+desktop/*.png
+dist/
+node_modules/
 web/.next/
 web/node_modules/
-.vercel
+web/tsconfig.tsbuildinfo
