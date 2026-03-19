@@ -98,7 +98,7 @@ export function LearningOverview({ domainId }: LearningOverviewProps) {
           onClick={handleAnalyze}
           disabled={analyzing}
           className="text-[11px] px-4 py-1.5 rounded-md transition-colors font-medium disabled:opacity-40"
-          style={{ background: 'var(--accent)', color: '#fff' }}
+          style={{ background: 'var(--btn-primary)', color: 'var(--btn-primary-text)' }}
         >
           {analyzing ? '분석 중...' : '수동 분석 실행'}
         </button>

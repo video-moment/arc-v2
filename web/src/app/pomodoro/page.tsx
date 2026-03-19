@@ -8,13 +8,19 @@ import GoalStrip, { type CreateGoalInput } from '@/components/GoalStrip';
 import GoalDetailPanel from '@/components/GoalDetailPanel';
 import CustomSelect from '@/components/CustomSelect';
 import CustomDatePicker from '@/components/CustomDatePicker';
+import { DndContext, closestCenter, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   type PomoProject, type PomoSubproject, type PomoTask, type PomoGoal,
   getPomoProjects, getPomoSubprojects,
   getPomoTasks, createPomoTask, updatePomoTask, deletePomoTask,
   getPomoGoals, createPomoGoal, updatePomoGoal, deletePomoGoal,
+  createPomoProject, deletePomoProject, updatePomoProject,
+  createPomoEpisode, reorderPomoTasks,
 } from '@/lib/api';
 import CalendarSidebar from '@/components/CalendarSidebar';
+import UndoToast, { useUndo } from '@/components/UndoToast';
 
 // Funnel icon
 function FunnelIcon({ size = 14 }: { size?: number }) {
@@ -57,16 +63,32 @@ function calcScore(task: PomoTask): number {
 type FilterType = 'all' | 'high' | 'due_soon' | 'in_progress' | 'assignee_me' | 'assignee_agent';
 type SortType = 'recommended' | 'priority' | 'due_date' | 'recent';
 
+function SortableTaskItem(props: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, position: 'relative' }}
+      {...attributes}
+      {...listeners}
+    >
+      {props.children}
+    </div>
+  );
+}
+
 export default function PomodoroPage() {
   const [projects, setProjects] = useState<PomoProject[]>([]);
   const [subprojects, setSubprojects] = useState<PomoSubproject[]>([]);
   const [tasks, setTasks] = useState<PomoTask[]>([]);
   const [goals, setGoals] = useState<PomoGoal[]>([]);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [detailGoal, setDetailGoal] = useState<PomoGoal | null>(null);
   const [agents, setAgents] = useState<AgentItem[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedSubprojectId, setSelectedSubprojectId] = useState<string | null>(null);
+  const undo = useUndo();
   const [showStats, setShowStats] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
 
@@ -92,7 +114,7 @@ export default function PomodoroPage() {
   const load = useCallback(async () => {
     const [p, sp, t, g, agentResult] = await Promise.all([
       getPomoProjects(), getPomoSubprojects(), getPomoTasks(),
-      getPomoGoals('active'),
+      getPomoGoals({ status: 'active' }),
       fetch('http://localhost:3300/api/agents').then(r => r.json()).catch(() => ({ agents: [] })),
     ]);
     setProjects(p);
@@ -206,6 +228,20 @@ export default function PomodoroPage() {
     return { pendingTasks: pending, completedTasks: completed };
   }, [baseTasks, filterType, sortType, searchQuery]);
 
+  // Today dashboard summary (uses ALL tasks, not filtered)
+  const todaySummary = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const threeDaysStr = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const allPending = tasks.filter(t => t.status !== 'completed');
+    return {
+      todayDue: allPending.filter(t => t.dueDate?.startsWith(todayStr)).length,
+      overdue: allPending.filter(t => t.dueDate && t.dueDate.slice(0, 10) < todayStr).length,
+      upcoming: allPending.filter(t => t.dueDate && t.dueDate.slice(0, 10) > todayStr && t.dueDate.slice(0, 10) <= threeDaysStr).length,
+      completedToday: tasks.filter(t => t.status === 'completed' && t.completedAt?.startsWith(todayStr)).length,
+    };
+  }, [tasks]);
+
   // Top recommended task IDs (for star marking)
   const recommendedIds = useMemo(() => {
     const sorted = [...tasks.filter(t => t.status !== 'completed')]
@@ -234,8 +270,6 @@ export default function PomodoroPage() {
     if (selectedSubprojectId) {
       input.subprojectId = selectedSubprojectId;
     } else if (selectedProjectId && !selectedGoalId) {
-      const hasSubs = subprojects.some(s => s.projectId === selectedProjectId);
-      if (hasSubs) return;
       input.projectId = selectedProjectId;
     }
 
@@ -252,17 +286,47 @@ export default function PomodoroPage() {
   };
 
   const handleToggleComplete = async (task: PomoTask) => {
+    const prevStatus = task.status;
+    const prevCompletedAt = task.completedAt;
     if (task.status === 'completed') {
       await updatePomoTask(task.id, { status: 'pending', completedAt: null });
     } else {
       await updatePomoTask(task.id, { status: 'completed', completedAt: new Date().toISOString() });
     }
     load();
+    undo.push({
+      message: task.status === 'completed' ? '"' + task.title + '" 미완료로 변경됨' : '"' + task.title + '" 완료 처리됨',
+      onUndo: async () => {
+        await updatePomoTask(task.id, { status: prevStatus, completedAt: prevCompletedAt ?? null });
+        load();
+      },
+    });
   };
 
   const handleDeleteTask = async (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
     await deletePomoTask(id);
     load();
+    undo.push({
+      message: '"' + task.title + '" 삭제됨',
+      onUndo: async () => {
+        await createPomoTask({
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          category: task.category,
+          estimatedPomodoros: task.estimatedPomodoros,
+          dueDate: task.dueDate,
+          goalId: task.goalId,
+          assigneeType: task.assigneeType,
+          assigneeAgentId: task.assigneeAgentId,
+          projectId: task.projectId,
+          subprojectId: task.subprojectId,
+        });
+        load();
+      },
+    });
   };
 
   const handleUpdateTask = async (id: string, updates: Parameters<typeof updatePomoTask>[1]) => {
@@ -270,11 +334,38 @@ export default function PomodoroPage() {
     load();
   };
 
+  const handleReorderTasks = async (activeId: string, overId: string) => {
+    const ids = pendingTasks.map(t => t.id);
+    const oldIdx = ids.indexOf(activeId);
+    const newIdx = ids.indexOf(overId);
+    if (oldIdx === -1 || newIdx === -1 || oldIdx === newIdx) return;
+    const reordered = [...ids];
+    reordered.splice(oldIdx, 1);
+    reordered.splice(newIdx, 0, activeId);
+    const updates = reordered.map((id, i) => ({ id, sortOrder: (i + 1) * 1000 }));
+    // Optimistic: update local state
+    setTasks(prev => {
+      const map = new Map(updates.map(u => [u.id, u.sortOrder]));
+      return prev.map(t => map.has(t.id) ? { ...t, sortOrder: map.get(t.id)! } : t);
+    });
+    await reorderPomoTasks(updates);
+  };
+
+  const handleAddEpisode = async (goalId: string) => {
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) return;
+    const newCount = goal.episodeCount + 1;
+    await Promise.all([
+      createPomoEpisode(goalId, newCount),
+      updatePomoGoal(goalId, { episodeCount: newCount, lastEpisodeAt: new Date().toISOString() }),
+    ]);
+    load();
+  };
+
   const handleSelectGoal = (id: string | null) => {
     setSelectedGoalId(id);
     setNewTaskGoalId(id || '');
     if (id) {
-      setSelectedProjectId(null);
       setShowInbox(false);
       setShowStats(false);
     }
@@ -291,9 +382,54 @@ export default function PomodoroPage() {
   };
 
   const handleDeleteGoal = async (id: string) => {
+    const goal = goals.find(g => g.id === id);
     await deletePomoGoal(id);
     setDetailGoal(null);
     if (selectedGoalId === id) setSelectedGoalId(null);
+    load();
+    if (goal) {
+      undo.push({
+        message: '"' + goal.title + '" 목표 삭제됨',
+        onUndo: async () => {
+          await createPomoGoal({
+            title: goal.title,
+            description: goal.description,
+            priority: goal.priority,
+            goalType: goal.goalType,
+            targetDate: goal.targetDate,
+            color: goal.color,
+            projectId: goal.projectId,
+            episodeTarget: goal.episodeTarget,
+          });
+          load();
+        },
+      });
+    }
+  };
+
+  const handleCreateProject = async (name: string, color: string) => {
+    await createPomoProject(name, color);
+    load();
+  };
+
+  const handleDeleteProject = async (id: string) => {
+    const project = projects.find(p => p.id === id);
+    await deletePomoProject(id);
+    if (selectedProjectId === id) setSelectedProjectId(null);
+    load();
+    if (project) {
+      undo.push({
+        message: '"' + project.name + '" 프로젝트 삭제됨',
+        onUndo: async () => {
+          await createPomoProject(project.name, project.color);
+          load();
+        },
+      });
+    }
+  };
+
+  const handleUpdateProject = async (id: string, updates: Partial<{ name: string; color: string }>) => {
+    await updatePomoProject(id, updates);
     load();
   };
 
@@ -312,8 +448,6 @@ export default function PomodoroPage() {
     setSelectedGoalId(null);
   };
 
-  // handleShowInbox is defined but referenced only via GoalStrip/other UI if needed
-  void handleShowInbox;
 
   const FILTERS: { key: FilterType; label: string }[] = [
     { key: 'all', label: '전체' },
@@ -369,20 +503,11 @@ export default function PomodoroPage() {
       <div className="flex-1 overflow-y-auto" style={{ background: 'var(--bg-page)' }}>
         <div className="px-8 py-6">
 
-          {/* Top header: date summary + stats icon */}
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
-              </p>
-              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {completedTasks.length > 0
-                  ? '오늘 ' + completedTasks.length + '개 완료' + (pendingTasks.length > 0 ? ', ' + pendingTasks.length + '개 남음' : ' · 모두 완료!')
-                  : pendingTasks.length > 0
-                    ? pendingTasks.length + '개 할 일이 있습니다'
-                    : '할 일이 없습니다'}
-              </p>
-            </div>
+          {/* Top header: date + stats toggle */}
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+            </p>
             <button
               onClick={handleShowStats}
               className="p-1.5 rounded-md transition-all"
@@ -394,6 +519,28 @@ export default function PomodoroPage() {
             >
               <ChartIcon size={15} />
             </button>
+          </div>
+
+          {/* Today dashboard summary cards */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            {todaySummary.overdue > 0 && (
+              <div style={{ padding: '8px 14px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', minWidth: '70px' }}>
+                <div className="tabular-nums" style={{ fontSize: '18px', fontWeight: 700, color: '#dc2626' }}>{todaySummary.overdue}</div>
+                <div style={{ fontSize: '11px', color: '#991b1b' }}>기한 초과</div>
+              </div>
+            )}
+            <div style={{ padding: '8px 14px', borderRadius: '8px', background: todaySummary.todayDue > 0 ? '#fffbeb' : 'var(--bg-elevated)', border: '1px solid ' + (todaySummary.todayDue > 0 ? '#fde68a' : 'var(--border-subtle)'), minWidth: '70px' }}>
+              <div className="tabular-nums" style={{ fontSize: '18px', fontWeight: 700, color: todaySummary.todayDue > 0 ? '#d97706' : 'var(--text-primary)' }}>{todaySummary.todayDue}</div>
+              <div style={{ fontSize: '11px', color: todaySummary.todayDue > 0 ? '#92400e' : 'var(--text-tertiary)' }}>오늘 마감</div>
+            </div>
+            <div style={{ padding: '8px 14px', borderRadius: '8px', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', minWidth: '70px' }}>
+              <div className="tabular-nums" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>{todaySummary.upcoming}</div>
+              <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>3일 내 예정</div>
+            </div>
+            <div style={{ padding: '8px 14px', borderRadius: '8px', background: todaySummary.completedToday > 0 ? '#f0fdf4' : 'var(--bg-elevated)', border: '1px solid ' + (todaySummary.completedToday > 0 ? '#bbf7d0' : 'var(--border-subtle)'), minWidth: '70px' }}>
+              <div className="tabular-nums" style={{ fontSize: '18px', fontWeight: 700, color: todaySummary.completedToday > 0 ? '#16a34a' : 'var(--text-primary)' }}>{todaySummary.completedToday}</div>
+              <div style={{ fontSize: '11px', color: todaySummary.completedToday > 0 ? '#166534' : 'var(--text-tertiary)' }}>오늘 완료</div>
+            </div>
           </div>
 
           {/* Stats panel */}
@@ -422,9 +569,14 @@ export default function PomodoroPage() {
             <GoalStrip
               goals={goals}
               tasks={tasks}
+              projects={projects}
               selectedGoalId={selectedGoalId}
+              selectedProjectId={selectedProjectId}
               onSelectGoal={handleSelectGoal}
+              onSelectProject={setSelectedProjectId}
               onCreateGoal={handleCreateGoal}
+              onUpdateGoal={handleUpdateGoal}
+              onAddEpisode={handleAddEpisode}
               onOpenDetail={setDetailGoal}
             />
           </div>
@@ -458,11 +610,21 @@ export default function PomodoroPage() {
                     className="flex-1 bg-transparent outline-none"
                     style={{ color: 'var(--text-primary)', fontSize: '14px' }}
                   />
+                  {/* Auto-linked goal indicator */}
+                  {newTaskGoalId && !quickAddExpanded && (() => {
+                    const g = goals.find(gl => gl.id === newTaskGoalId);
+                    return g ? (
+                      <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: g.color || '#6366f1' }} />
+                        {g.title}
+                      </span>
+                    ) : null;
+                  })()}
                   {newTaskTitle.trim() && (
                     <button
                       type="submit"
                       className="px-2.5 py-1 rounded-md text-xs font-medium transition-all flex-shrink-0"
-                      style={{ background: 'var(--accent)', color: '#fff' }}
+                      style={{ background: 'var(--btn-primary)', color: 'var(--btn-primary-text)' }}
                     >
                       추가
                     </button>
@@ -552,7 +714,7 @@ export default function PomodoroPage() {
                   {activeFilterCount > 0 && (
                     <span
                       className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] flex items-center justify-center font-medium"
-                      style={{ background: 'var(--accent)', color: '#fff' }}
+                      style={{ background: 'var(--btn-primary)', color: 'var(--btn-primary-text)' }}
                     >
                       {activeFilterCount}
                     </span>
@@ -606,30 +768,40 @@ export default function PomodoroPage() {
             )}
 
             {/* Pending tasks */}
+            <DndContext
+              sensors={dndSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(event: DragEndEvent) => {
+                const { active, over } = event;
+                if (over && active.id !== over.id) handleReorderTasks(active.id as string, over.id as string);
+              }}
+            >
+            <SortableContext items={pendingTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-2">
               {pendingTasks.map(t => (
-                <div key={t.id} className="flex items-start">
-                  {/* Star mark for recommended */}
-                  {recommendedIds.has(t.id) && !selectedGoalId && !showInbox && !searchQuery && filterType === 'all' && (
-                    <span
-                      className="flex-shrink-0 mt-3 mr-1.5 text-xs leading-none"
-                      style={{ color: 'var(--yellow)', opacity: 0.7 }}
-                      title="오늘의 추천"
-                    >
-                      ★
-                    </span>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <TaskItem
-                      task={t}
-                      onToggleComplete={handleToggleComplete}
-                      onDelete={handleDeleteTask}
-                      onUpdate={handleUpdateTask}
-                      goals={goals}
-                      agents={agents}
-                    />
+                <SortableTaskItem key={t.id} id={t.id}>
+                  <div className="flex items-start">
+                    {recommendedIds.has(t.id) && !selectedGoalId && !showInbox && !searchQuery && filterType === 'all' && (
+                      <span
+                        className="flex-shrink-0 mt-3 mr-1.5 text-xs leading-none"
+                        style={{ color: 'var(--yellow)', opacity: 0.7 }}
+                        title="오늘의 추천"
+                      >
+                        ★
+                      </span>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <TaskItem
+                        task={t}
+                        onToggleComplete={handleToggleComplete}
+                        onDelete={handleDeleteTask}
+                        onUpdate={handleUpdateTask}
+                        goals={goals}
+                        agents={agents}
+                      />
+                    </div>
                   </div>
-                </div>
+                </SortableTaskItem>
               ))}
               {pendingTasks.length === 0 && (
                 <div className="py-12 text-center">
@@ -646,6 +818,8 @@ export default function PomodoroPage() {
                 </div>
               )}
             </div>
+            </SortableContext>
+            </DndContext>
 
             {/* Completed tasks — collapsible */}
             {completedTasks.length > 0 && (
@@ -702,9 +876,19 @@ export default function PomodoroPage() {
 
       {/* Calendar sidebar — right fixed panel */}
       <div className="flex-shrink-0 overflow-y-auto" style={{ width: '300px', borderLeft: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
-        <CalendarSidebar tasks={tasks} goals={goals} />
+        <CalendarSidebar
+          tasks={tasks}
+          goals={goals}
+          projects={projects}
+          selectedProjectId={selectedProjectId}
+          onSelectProject={setSelectedProjectId}
+          onCreateProject={handleCreateProject}
+          onDeleteProject={handleDeleteProject}
+          onUpdateProject={handleUpdateProject}
+        />
       </div>
       </div>{/* end flex row */}
+      <UndoToast entries={undo.entries} onRemove={undo.remove} />
     </div>
   );
 }

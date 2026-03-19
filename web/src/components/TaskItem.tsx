@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { PomoTask, PomoGoal } from '@/lib/api';
-import { CheckIcon, XIcon, EditIcon, CalendarIcon, BotIcon } from './Icons';
+import { CheckIcon, XIcon, CalendarIcon, BotIcon } from './Icons';
 import CustomSelect from '@/components/CustomSelect';
 import CustomDatePicker from '@/components/CustomDatePicker';
 
@@ -17,7 +17,7 @@ interface Props {
 
 const AGENT_STATUS_CYCLE: Array<PomoTask['status']> = ['pending', 'in_progress', 'completed'];
 
-function formatDueDate(dueDate: string): { text: string; urgent: boolean } {
+function formatDueDate(dueDate: string): { text: string; urgent: boolean; overdue: boolean } {
   const now = new Date();
   const due = new Date(dueDate);
   const todayStr = now.toISOString().split('T')[0];
@@ -26,69 +26,207 @@ function formatDueDate(dueDate: string): { text: string; urgent: boolean } {
   const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
   const dueStr = due.toISOString().split('T')[0];
 
-  const daysLeft = (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+  const daysLeft = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-  if (dueStr < todayStr) return { text: '기한 초과', urgent: true };
-  if (dueStr === todayStr) return { text: '오늘', urgent: true };
-  if (dueStr === tomorrowStr) return { text: '내일', urgent: daysLeft <= 1 };
+  if (dueStr < todayStr) return { text: (due.getMonth() + 1) + '/' + due.getDate() + ' 초과', urgent: true, overdue: true };
+  if (dueStr === todayStr) return { text: 'D-Day', urgent: true, overdue: false };
+  if (dueStr === tomorrowStr) return { text: 'D-1', urgent: true, overdue: false };
+  if (daysLeft <= 7) return { text: 'D-' + daysLeft, urgent: true, overdue: false };
   return {
     text: (due.getMonth() + 1) + '/' + due.getDate(),
-    urgent: daysLeft <= 3,
+    urgent: false,
+    overdue: false,
   };
 }
 
-// Priority dot colors — high=red, medium=yellow, low=hidden
 const PRIORITY_DOT: Record<string, string | null> = {
   high: 'var(--red)',
   medium: 'var(--yellow)',
   low: null,
 };
 
+// ── Edit Modal ──
+function TaskEditModal({
+  task,
+  goals,
+  agents,
+  onSave,
+  onClose,
+}: {
+  task: PomoTask;
+  goals?: PomoGoal[];
+  agents?: { id: string; name: string }[];
+  onSave: (id: string, updates: Record<string, any>) => void;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState(task.title);
+  const [priority, setPriority] = useState<string>(task.priority);
+  const [dueDate, setDueDate] = useState(task.dueDate || '');
+  const [category, setCategory] = useState(task.category || '');
+  const [goalId, setGoalId] = useState(task.goalId || '');
+  const [assignee, setAssignee] = useState<'me' | 'agent'>(task.assigneeType || 'me');
+  const [agentId, setAgentId] = useState(task.assigneeAgentId || '');
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { titleRef.current?.focus(); }, []);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const handleSave = () => {
+    if (!title.trim()) return;
+    onSave(task.id, {
+      title: title.trim(),
+      priority,
+      dueDate: dueDate || null,
+      category: category.trim() || null,
+      goalId: goalId || null,
+      assigneeType: assignee,
+      assigneeAgentId: assignee === 'agent' && agentId ? agentId : null,
+    });
+    onClose();
+  };
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 999, backdropFilter: 'blur(2px)' }}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '460px',
+          maxWidth: '92vw',
+          background: 'var(--bg-secondary)',
+          borderRadius: '16px',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
+          zIndex: 1000,
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <div style={{ padding: '18px 24px 14px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>할 일 수정</span>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '4px' }}>×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Title */}
+          <div>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>제목</label>
+            <input
+              ref={titleRef}
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && title.trim()) handleSave(); }}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: '15px', outline: 'none' }}
+            />
+          </div>
+
+          {/* Priority + Due date + Category */}
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>우선순위</label>
+              <CustomSelect
+                size="md"
+                value={priority}
+                options={[
+                  { value: 'high', label: '높음', color: 'var(--red)' },
+                  { value: 'medium', label: '보통', color: 'var(--yellow)' },
+                  { value: 'low', label: '낮음' },
+                ]}
+                onChange={setPriority}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>마감일</label>
+              <CustomDatePicker
+                size="md"
+                value={dueDate}
+                onChange={setDueDate}
+                placeholder="날짜 선택"
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>카테고리</label>
+              <input
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                placeholder="선택"
+                style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: '13px', outline: 'none' }}
+              />
+            </div>
+          </div>
+
+          {/* Goal + Assignee */}
+          <div style={{ display: 'flex', gap: '12px' }}>
+            {goals && goals.length > 0 && (
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>목표</label>
+                <CustomSelect
+                  size="md"
+                  value={goalId}
+                  options={[
+                    { value: '', label: '없음' },
+                    ...goals.map(g => ({ value: g.id, label: g.title, color: g.color })),
+                  ]}
+                  onChange={setGoalId}
+                />
+              </div>
+            )}
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>담당</label>
+              <CustomSelect
+                size="md"
+                value={assignee === 'agent' ? agentId : 'me'}
+                options={[
+                  { value: 'me', label: '나' },
+                  ...(agents ?? []).map(a => ({ value: a.id, label: a.name })),
+                ]}
+                onChange={val => {
+                  if (val === 'me') { setAssignee('me'); setAgentId(''); }
+                  else { setAssignee('agent'); setAgentId(val); }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '14px 24px 18px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button
+            onClick={onClose}
+            style={{ padding: '9px 20px', borderRadius: '10px', fontSize: '14px', fontWeight: 500, border: 'none', background: 'var(--btn-secondary)', color: 'var(--btn-secondary-text)', cursor: 'pointer' }}
+          >
+            취소
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!title.trim()}
+            style={{ padding: '9px 24px', borderRadius: '10px', fontSize: '14px', fontWeight: 600, border: 'none', background: title.trim() ? 'var(--btn-primary)' : 'var(--bg-tertiary)', color: title.trim() ? 'var(--btn-primary-text)' : 'var(--text-tertiary)', cursor: title.trim() ? 'pointer' : 'not-allowed' }}
+          >
+            저장
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Main TaskItem ──
 export default function TaskItem({ task, onToggleComplete, onDelete, onUpdate, goals, agents }: Props) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(task.title);
-  const [editPriority, setEditPriority] = useState<string>(task.priority);
-  const [editDueDate, setEditDueDate] = useState(task.dueDate || '');
-  const [editCategory, setEditCategory] = useState(task.category || '');
-  const [editGoalId, setEditGoalId] = useState(task.goalId || '');
-  const [editAssignee, setEditAssignee] = useState<'me' | 'agent'>(task.assigneeType || 'me');
-  const [editAgentId, setEditAgentId] = useState(task.assigneeAgentId || '');
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const isCompleted = task.status === 'completed';
   const priorityDot = PRIORITY_DOT[task.priority] ?? null;
   const dueDateInfo = task.dueDate ? formatDueDate(task.dueDate) : null;
-
-  const handleStartEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditTitle(task.title);
-    setEditPriority(task.priority);
-    setEditDueDate(task.dueDate || '');
-    setEditCategory(task.category || '');
-    setEditGoalId(task.goalId || '');
-    setEditAssignee(task.assigneeType || 'me');
-    setEditAgentId(task.assigneeAgentId || '');
-    setIsEditing(true);
-  };
-
-  const handleSave = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!onUpdate || !editTitle.trim()) return;
-    onUpdate(task.id, {
-      title: editTitle.trim(),
-      priority: editPriority,
-      dueDate: editDueDate || null,
-      category: editCategory.trim() || null,
-      goalId: editGoalId || null,
-      assigneeType: editAssignee,
-      assigneeAgentId: editAssignee === 'agent' && editAgentId ? editAgentId : null,
-    });
-    setIsEditing(false);
-  };
-
-  const handleCancel = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsEditing(false);
-  };
 
   const handleAgentStatusCycle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -98,251 +236,128 @@ export default function TaskItem({ task, onToggleComplete, onDelete, onUpdate, g
     onUpdate(task.id, { status: nextStatus });
   };
 
+  const goalInfo = task.goalId && goals ? goals.find(g => g.id === task.goalId) : null;
+
   return (
-    <div
-      className="group rounded-md transition-all duration-150"
-      style={{
-        borderLeft: '2px solid transparent',
-      }}
-    >
+    <>
       <div
-        className="flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-150"
-        style={{ background: 'transparent', cursor: 'default' }}
-        onMouseEnter={e => {
-          if (!isEditing) {
-            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-          }
+        className="group transition-all duration-150"
+        onDoubleClick={() => onUpdate && !isCompleted && setShowEditModal(true)}
+        style={{
+          borderRadius: '8px',
+          background: isCompleted ? 'var(--bg-secondary)' : 'var(--bg-elevated)',
+          border: '1px solid var(--border-subtle)',
+          cursor: 'default',
+          opacity: isCompleted ? 0.5 : 1,
+          padding: '10px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
+          transition: 'background 0.15s',
         }}
-        onMouseLeave={e => {
-          if (!isEditing) {
-            (e.currentTarget as HTMLElement).style.background = 'transparent';
-          }
-        }}
+        onMouseEnter={e => { if (!isCompleted) (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+        onMouseLeave={e => { if (!isCompleted) (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'; }}
       >
-        {/* Circular checkbox */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleComplete(task); }}
-          className="w-[18px] h-[18px] rounded-full flex items-center justify-center flex-shrink-0 transition-all"
-          style={{
-            border: isCompleted ? 'none' : '1.5px solid var(--border)',
-            background: isCompleted ? 'var(--green)' : 'transparent',
-          }}
-          onMouseEnter={e => {
-            if (!isCompleted) (e.currentTarget as HTMLElement).style.borderColor = 'var(--green)';
-          }}
-          onMouseLeave={e => {
-            if (!isCompleted) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)';
-          }}
-        >
-          {isCompleted && <CheckIcon />}
-        </button>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0 flex items-center gap-2">
-          {/* Priority dot */}
-          {priorityDot && !isCompleted && (
-            <div
-              className="flex-shrink-0 w-2 h-2 rounded-full"
-              style={{ background: priorityDot }}
-            />
-          )}
-
-          {/* Title */}
-          <span
-            className="text-sm font-medium truncate"
-            style={{
-              color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)',
-              textDecoration: isCompleted ? 'line-through' : 'none',
-            }}
-          >
-            {task.title}
-          </span>
-
-          {/* Goal tag */}
-          {task.goalId && goals && (() => {
-            const goal = goals.find(g => g.id === task.goalId);
-            if (!goal) return null;
-            return (
-              <span
-                className="flex-shrink-0 flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full"
-                style={{
-                  background: 'var(--bg-secondary)',
-                  color: 'var(--text-tertiary)',
-                  maxWidth: '90px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <span
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ background: goal.color || 'var(--accent)', display: 'inline-block' }}
-                />
-                <span className="truncate">{goal.title}</span>
-              </span>
-            );
-          })()}
-
-          {/* Due date */}
-          {dueDateInfo && (
-            <span
-              className="text-[11px] flex items-center gap-0.5 flex-shrink-0"
-              style={{
-                color: dueDateInfo.urgent ? 'var(--red)' : 'var(--text-tertiary)',
-              }}
-            >
-              <CalendarIcon size={9} />
-              {dueDateInfo.text}
-            </span>
-          )}
-
-          {/* Category */}
-          {task.category && (
-            <span
-              className="text-[11px] flex-shrink-0"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              {task.category}
-            </span>
-          )}
-
-          {/* Agent badge */}
-          {task.assigneeType === 'agent' && task.assigneeAgentId && (
-            <span
-              className="text-[11px] flex items-center gap-0.5 flex-shrink-0"
-              style={{ color: 'var(--blue)' }}
-            >
-              <BotIcon size={9} />{task.assigneeAgentId}
-            </span>
-          )}
-        </div>
-
-        {/* Right side: agent status chip only */}
-        {task.assigneeType === 'agent' && (
-          <div className="flex-shrink-0">
+          {/* Row 1: Checkbox + Title + actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
-              onClick={handleAgentStatusCycle}
-              className="text-[11px] px-2 py-0.5 rounded-full font-medium transition-all"
-              style={
-                task.status === 'completed'
-                  ? { background: 'var(--green-soft)', color: 'var(--green)' }
-                  : task.status === 'in_progress'
-                  ? { background: 'var(--yellow-soft)', color: 'var(--yellow)' }
-                  : { background: 'transparent', color: 'var(--text-tertiary)', border: '1px solid var(--border-subtle)' }
-              }
+              onClick={(e) => { e.stopPropagation(); onToggleComplete(task); }}
+              style={{
+                width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: isCompleted ? 'none' : '1.5px solid #d1d5db',
+                background: isCompleted ? 'var(--green)' : 'transparent',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { if (!isCompleted) (e.currentTarget as HTMLElement).style.borderColor = 'var(--green)'; }}
+              onMouseLeave={e => { if (!isCompleted) (e.currentTarget as HTMLElement).style.borderColor = '#d1d5db'; }}
             >
-              {task.status === 'completed' ? '완료' : task.status === 'in_progress' ? '진행중' : '대기'}
+              {isCompleted && <CheckIcon />}
+            </button>
+
+            <span style={{ flex: 1, fontSize: '13px', fontWeight: 500, color: isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)', textDecoration: isCompleted ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {task.title}
+            </span>
+
+            {task.assigneeType === 'agent' && (
+              <button
+                onClick={handleAgentStatusCycle}
+                className="text-[11px] px-2 py-0.5 rounded-md font-medium transition-all flex-shrink-0"
+                style={
+                  task.status === 'completed'
+                    ? { background: 'var(--green-soft)', color: 'var(--green)', border: 'none' }
+                    : task.status === 'in_progress'
+                    ? { background: 'var(--yellow-soft)', color: 'var(--yellow)', border: 'none' }
+                    : { background: 'var(--bg-tertiary)', color: 'var(--text-tertiary)', border: 'none' }
+                }
+              >
+                {task.status === 'completed' ? '완료' : task.status === 'in_progress' ? '진행중' : '대기'}
+              </button>
+            )}
+
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
+              className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity flex-shrink-0"
+              style={{ color: 'var(--text-tertiary)', border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px' }}
+            >
+              <XIcon size={12} />
             </button>
           </div>
-        )}
 
-        {/* Edit button — hover only */}
-        {onUpdate && !isCompleted && (
-          <button
-            onClick={handleStartEdit}
-            className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            <EditIcon size={13} />
-          </button>
-        )}
+          {/* Row 2: Meta — only show if there's something to display */}
+          {!isCompleted && (dueDateInfo || goalInfo || task.category) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '28px' }}>
+              {/* Due date */}
+              {dueDateInfo && (
+                <span
+                  style={{
+                    fontSize: '11px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px',
+                    padding: '1px 7px', borderRadius: '4px',
+                    background: dueDateInfo.overdue ? '#fecaca' : dueDateInfo.urgent ? 'rgba(239,68,68,0.08)' : 'var(--bg-tertiary)',
+                    color: dueDateInfo.overdue ? '#991b1b' : dueDateInfo.urgent ? '#dc2626' : 'var(--text-secondary)',
+                  }}
+                >
+                  <CalendarIcon size={9} />
+                  {dueDateInfo.text}
+                </span>
+              )}
 
-        {/* Delete — hover only */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
-          className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          <XIcon size={13} />
-        </button>
+              {/* Goal */}
+              {goalInfo && (
+                <span style={{ fontSize: '11px', fontWeight: 400, display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-secondary)' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: goalInfo.color || '#6366f1', flexShrink: 0 }} />
+                  {goalInfo.title}
+                </span>
+              )}
+
+              {/* Category */}
+              {task.category && (
+                <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--text-tertiary)' }}>
+                  {task.category}
+                </span>
+              )}
+
+              {/* Agent */}
+              {task.assigneeType === 'agent' && task.assigneeAgentId && (
+                <span style={{ fontSize: '11px', fontWeight: 400, display: 'inline-flex', alignItems: 'center', gap: '3px', color: 'var(--text-secondary)' }}>
+                  <BotIcon size={9} />
+                  {(() => { const a = agents?.find(x => x.id === task.assigneeAgentId); return a ? a.name : task.assigneeAgentId; })()}
+                </span>
+              )}
+            </div>
+          )}
       </div>
 
-      {/* Inline edit panel */}
-      {isEditing && (
-        <div
-          className="px-4 py-3 space-y-2"
-          style={{ borderTop: '1px solid var(--border-subtle)' }}
-          onClick={e => e.stopPropagation()}
-        >
-          <input
-            autoFocus
-            value={editTitle}
-            onChange={e => setEditTitle(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-            style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-          />
-          <div className="flex gap-2 flex-wrap items-center">
-            <CustomSelect
-              size="sm"
-              value={editPriority}
-              options={[
-                { value: 'high', label: '높음', color: 'var(--red)' },
-                { value: 'medium', label: '보통', color: 'var(--yellow)' },
-                { value: 'low', label: '낮음' },
-              ]}
-              onChange={setEditPriority}
-            />
-            <CustomDatePicker
-              size="sm"
-              value={editDueDate}
-              onChange={setEditDueDate}
-              placeholder="날짜"
-            />
-            <input
-              value={editCategory}
-              onChange={e => setEditCategory(e.target.value)}
-              placeholder="카테고리"
-              className="px-2 py-1.5 rounded-lg text-xs outline-none w-24"
-              style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
-            />
-            {goals && goals.length > 0 && (
-              <CustomSelect
-                size="sm"
-                value={editGoalId}
-                options={[
-                  { value: '', label: '목표 없음' },
-                  ...goals.map(g => ({ value: g.id, label: g.title, color: g.color })),
-                ]}
-                onChange={setEditGoalId}
-                placeholder="목표"
-              />
-            )}
-            <CustomSelect
-              size="sm"
-              value={editAssignee === 'agent' ? editAgentId : 'me'}
-              options={[
-                { value: 'me', label: '나' },
-                ...(agents ?? []).map(a => ({ value: a.id, label: a.name })),
-              ]}
-              onChange={val => {
-                if (val === 'me') {
-                  setEditAssignee('me');
-                  setEditAgentId('');
-                } else {
-                  setEditAssignee('agent');
-                  setEditAgentId(val);
-                }
-              }}
-            />
-            <div className="ml-auto flex gap-1.5">
-              <button
-                onClick={handleSave}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                style={{ background: 'var(--accent)', color: '#fff' }}
-              >
-                저장
-              </button>
-              <button
-                onClick={handleCancel}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium"
-                style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Edit modal */}
+      {showEditModal && onUpdate && (
+        <TaskEditModal
+          task={task}
+          goals={goals}
+          agents={agents}
+          onSave={(id, updates) => { onUpdate(id, updates); }}
+          onClose={() => setShowEditModal(false)}
+        />
       )}
-    </div>
+    </>
   );
 }

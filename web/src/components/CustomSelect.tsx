@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface SelectOption {
   value: string;
@@ -19,16 +20,7 @@ interface Props {
 
 function ChevronDown({ size }: { size: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="6 9 12 15 18 9" />
     </svg>
   );
@@ -36,16 +28,7 @@ function ChevronDown({ size }: { size: number }) {
 
 function CheckMark({ size }: { size: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
     </svg>
   );
@@ -60,21 +43,42 @@ export default function CustomSelect({
   disabled = false,
 }: Props) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0, minWidth: 0 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const selected = options.find(o => o.value === value);
 
-  // Close on outside click
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const dropdownHeight = options.length * 36 + 8;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow < dropdownHeight ? rect.top - dropdownHeight - 4 : rect.bottom + 4;
+    setPos({ top, left: rect.left, minWidth: rect.width });
+  }, [options.length]);
+
   useEffect(() => {
     if (!open) return;
+    updatePosition();
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [open, updatePosition]);
 
   const isSm = size === 'sm';
 
@@ -96,119 +100,88 @@ export default function CustomSelect({
     whiteSpace: 'nowrap',
   };
 
-  const dropdownStyle: React.CSSProperties = {
-    position: 'absolute',
-    top: 'calc(100% + 4px)',
-    left: 0,
-    minWidth: '100%',
-    background: 'var(--bg-elevated)',
-    borderRadius: '8px',
-    boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.06)',
-    zIndex: 50,
-    overflow: 'hidden',
-    opacity: open ? 1 : 0,
-    transform: open ? 'translateY(0)' : 'translateY(-4px)',
-    pointerEvents: open ? 'auto' : 'none',
-    transition: 'opacity 0.15s ease, transform 0.15s ease',
-  };
+  const dropdown = open && typeof document !== 'undefined' ? createPortal(
+    <div
+      ref={dropdownRef}
+      style={{
+        position: 'fixed',
+        top: pos.top + 'px',
+        left: pos.left + 'px',
+        minWidth: pos.minWidth + 'px',
+        background: 'var(--bg-elevated)',
+        borderRadius: '8px',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
+        zIndex: 9999,
+        overflow: 'hidden',
+        animation: 'fadeInUp 0.15s ease',
+        padding: '4px 0',
+      }}
+    >
+      {options.map(option => {
+        const isSelected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => {
+              onChange(option.value);
+              setOpen(false);
+            }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              width: '100%', padding: isSm ? '6px 10px' : '8px 12px',
+              fontSize: isSm ? '11px' : '13px', textAlign: 'left',
+              background: isSelected ? 'var(--accent-soft)' : 'transparent',
+              color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
+              border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+              transition: 'background 0.1s ease',
+            }}
+            onMouseEnter={e => {
+              if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+            }}
+            onMouseLeave={e => {
+              if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'transparent';
+            }}
+          >
+            {option.color && (
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: option.color, flexShrink: 0 }} />
+            )}
+            <span style={{ flex: 1 }}>{option.label}</span>
+            {isSelected && (
+              <span style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center' }}>
+                <CheckMark size={isSm ? 10 : 12} />
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>,
+    document.body
+  ) : null;
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
-      {/* Trigger button */}
+    <div style={{ display: 'inline-block' }}>
       <button
+        ref={triggerRef}
         type="button"
         style={triggerStyle}
-        onClick={() => {
-          if (!disabled) setOpen(o => !o);
-        }}
+        onClick={() => { if (!disabled) setOpen(o => !o); }}
         disabled={disabled}
       >
-        {/* Color dot */}
         {selected?.color && (
-          <span
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: selected.color,
-              flexShrink: 0,
-            }}
-          />
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: selected.color, flexShrink: 0 }} />
         )}
         <span style={{ flex: 1 }}>{selected ? selected.label : placeholder}</span>
         <span
           style={{
-            color: 'var(--text-tertiary)',
-            display: 'flex',
-            alignItems: 'center',
-            transition: 'transform 0.15s ease',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center',
+            transition: 'transform 0.15s ease', transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
           }}
         >
           <ChevronDown size={isSm ? 10 : 12} />
         </span>
       </button>
-
-      {/* Dropdown */}
-      <div style={dropdownStyle}>
-        {options.map(option => {
-          const isSelected = option.value === value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                width: '100%',
-                padding: isSm ? '6px 10px' : '8px 12px',
-                fontSize: isSm ? '11px' : '13px',
-                textAlign: 'left',
-                background: isSelected ? 'var(--accent-soft)' : 'transparent',
-                color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
-                border: 'none',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'background 0.1s ease',
-              }}
-              onMouseEnter={e => {
-                if (!isSelected) {
-                  (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-                }
-              }}
-              onMouseLeave={e => {
-                if (!isSelected) {
-                  (e.currentTarget as HTMLElement).style.background = 'transparent';
-                }
-              }}
-            >
-              {/* Color dot */}
-              {option.color && (
-                <span
-                  style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    background: option.color,
-                    flexShrink: 0,
-                  }}
-                />
-              )}
-              <span style={{ flex: 1 }}>{option.label}</span>
-              {isSelected && (
-                <span style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center' }}>
-                  <CheckMark size={isSm ? 10 : 12} />
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {dropdown}
     </div>
   );
 }

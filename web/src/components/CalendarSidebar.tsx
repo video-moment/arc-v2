@@ -1,11 +1,19 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { type PomoTask, type PomoGoal } from '@/lib/api';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { type PomoTask, type PomoGoal, type PomoProject } from '@/lib/api';
+
+const PROJECT_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981', '#3b82f6', '#06b6d4'];
 
 interface Props {
   tasks: PomoTask[];
   goals: PomoGoal[];
+  projects?: PomoProject[];
+  selectedProjectId?: string | null;
+  onSelectProject?: (id: string | null) => void;
+  onCreateProject?: (name: string, color: string) => void;
+  onDeleteProject?: (id: string) => void;
+  onUpdateProject?: (id: string, updates: Partial<{ name: string; color: string }>) => void;
 }
 
 const DOW_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -22,7 +30,7 @@ function parseLocalDate(str: string): Date {
   return new Date(y, m - 1, d);
 }
 
-export default function CalendarSidebar({ tasks, goals }: Props) {
+export default function CalendarSidebar({ tasks, goals, projects = [], selectedProjectId, onSelectProject, onCreateProject, onDeleteProject, onUpdateProject }: Props) {
   const today = new Date();
   const todayStr = toLocalDateStr(today);
 
@@ -92,8 +100,232 @@ export default function CalendarSidebar({ tasks, goals }: Props) {
 
   const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth();
 
+  // Project section state
+  const [showProjectForm, setShowProjectForm] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0]);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
+  const newInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showProjectForm) setTimeout(() => newInputRef.current?.focus(), 30);
+  }, [showProjectForm]);
+
+  useEffect(() => {
+    if (editingProjectId) setTimeout(() => editInputRef.current?.select(), 30);
+  }, [editingProjectId]);
+
+  const handleCreateProject = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjectName.trim() || !onCreateProject) return;
+    onCreateProject(newProjectName.trim(), newProjectColor);
+    setNewProjectName('');
+    setNewProjectColor(PROJECT_COLORS[0]);
+    setShowProjectForm(false);
+  };
+
+  const handleEditCommit = (id: string) => {
+    const trimmed = editName.trim();
+    if (trimmed && onUpdateProject) {
+      onUpdateProject(id, { name: trimmed });
+    }
+    setEditingProjectId(null);
+  };
+
+  const getProjectTaskCount = (projectId: string) =>
+    tasks.filter(t => t.status !== 'completed' && t.projectId === projectId).length;
+
+  const getProjectGoalCount = (projectId: string) =>
+    goals.filter(g => g.projectId === projectId).length;
+
   return (
     <div className="flex flex-col h-full" style={{ padding: '20px 16px' }}>
+      {/* Project section */}
+      {projects.length > 0 || onCreateProject ? (
+        <div style={{ marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)' }}>
+              프로젝트
+            </span>
+            {onCreateProject && (
+              <button
+                onClick={() => setShowProjectForm(v => !v)}
+                style={{ border: 'none', background: 'transparent', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: '2px 4px' }}
+              >
+                {showProjectForm ? '×' : '+'}
+              </button>
+            )}
+          </div>
+
+          {/* Project list */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            {/* "전체" button */}
+            <button
+              onClick={() => onSelectProject?.(null)}
+              className="w-full flex items-center gap-2 rounded-lg transition-all"
+              style={{
+                padding: '7px 10px',
+                background: !selectedProjectId ? 'var(--accent-soft)' : 'transparent',
+                color: !selectedProjectId ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontWeight: !selectedProjectId ? 600 : 400,
+                fontSize: '13px',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--text-tertiary)', flexShrink: 0 }} />
+              전체
+              <span className="ml-auto text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+                {tasks.filter(t => t.status !== 'completed').length}
+              </span>
+            </button>
+
+            {projects.map(p => {
+              const isSelected = selectedProjectId === p.id;
+              const isEditing = editingProjectId === p.id;
+              const taskCount = getProjectTaskCount(p.id);
+              const goalCount = getProjectGoalCount(p.id);
+
+              return (
+                <div key={p.id} className="group flex items-center">
+                  {isEditing ? (
+                    <input
+                      ref={editInputRef}
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      onBlur={() => handleEditCommit(p.id)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleEditCommit(p.id);
+                        if (e.key === 'Escape') setEditingProjectId(null);
+                      }}
+                      className="flex-1 rounded-lg"
+                      style={{
+                        padding: '7px 10px',
+                        fontSize: '13px',
+                        background: 'var(--bg-primary)',
+                        color: 'var(--text-primary)',
+                        border: '1px solid var(--accent)',
+                        outline: 'none',
+                      }}
+                    />
+                  ) : (
+                    <button
+                      onClick={() => onSelectProject?.(isSelected ? null : p.id)}
+                      onDoubleClick={() => { setEditingProjectId(p.id); setEditName(p.name); }}
+                      className="flex-1 flex items-center gap-2 rounded-lg transition-all"
+                      style={{
+                        padding: '7px 10px',
+                        background: isSelected ? 'var(--accent-soft)' : 'transparent',
+                        color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        fontWeight: isSelected ? 600 : 400,
+                        fontSize: '13px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+                      <span className="flex-1 truncate">{p.name}</span>
+                      <span className="text-[11px] flex-shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+                        {goalCount > 0 ? goalCount + '목표' : ''}{goalCount > 0 && taskCount > 0 ? ' · ' : ''}{taskCount > 0 ? taskCount : ''}
+                      </span>
+                    </button>
+                  )}
+                  {!isEditing && onDeleteProject && (
+                    <button
+                      onClick={() => onDeleteProject(p.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      style={{ border: 'none', background: 'transparent', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '14px', padding: '2px 6px' }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* New project form */}
+          {showProjectForm && (
+            <form onSubmit={handleCreateProject} style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <input
+                ref={newInputRef}
+                value={newProjectName}
+                onChange={e => setNewProjectName(e.target.value)}
+                placeholder="프로젝트 이름"
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  outline: 'none',
+                }}
+              />
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                {PROJECT_COLORS.map(c => (
+                  <button
+                    type="button"
+                    key={c}
+                    onClick={() => setNewProjectColor(c)}
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      background: c,
+                      border: newProjectColor === c ? '2.5px solid var(--text-primary)' : '2.5px solid transparent',
+                      cursor: 'pointer',
+                      padding: 0,
+                      outline: 'none',
+                      transition: 'transform 0.1s',
+                      transform: newProjectColor === c ? 'scale(1.2)' : 'scale(1)',
+                    }}
+                  />
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  type="submit"
+                  disabled={!newProjectName.trim()}
+                  style={{
+                    flex: 1,
+                    padding: '6px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    border: 'none',
+                    background: newProjectName.trim() ? 'var(--btn-primary)' : 'var(--bg-tertiary)',
+                    color: newProjectName.trim() ? 'var(--btn-primary-text)' : 'var(--text-tertiary)',
+                    cursor: newProjectName.trim() ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  추가
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowProjectForm(false); setNewProjectName(''); }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    border: 'none',
+                    background: 'var(--btn-secondary)',
+                    color: 'var(--btn-secondary-text)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  취소
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      ) : null}
+
       {/* Month navigation */}
       <div className="flex items-center justify-between mb-5">
         <button
@@ -131,13 +363,13 @@ export default function CalendarSidebar({ tasks, goals }: Props) {
       </div>
 
       {/* Day of week header */}
-      <div className="grid grid-cols-7 mb-1">
+      <div className="grid grid-cols-7 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: '8px' }}>
         {DOW_LABELS.map((dow, i) => (
           <div
             key={dow}
-            className="text-center text-[11px] font-medium py-1"
+            className="text-center text-[13px] font-semibold"
             style={{
-              color: i === 0 ? 'var(--red)' : i === 6 ? 'var(--blue)' : 'var(--text-tertiary)',
+              color: i === 0 ? 'var(--red)' : i === 6 ? 'var(--blue)' : 'var(--text-secondary)',
             }}
           >
             {dow}
@@ -146,9 +378,9 @@ export default function CalendarSidebar({ tasks, goals }: Props) {
       </div>
 
       {/* Date grid */}
-      <div className="grid grid-cols-7 gap-y-0.5 mb-4">
+      <div className="grid grid-cols-7 mb-4" style={{ paddingTop: '4px' }}>
         {calendarDays.map((cell, idx) => {
-          if (!cell) return <div key={`e-${idx}`} className="h-9" />;
+          if (!cell) return <div key={`e-${idx}`} style={{ height: '38px' }} />;
 
           const { dateStr, day } = cell;
           const isToday = dateStr === todayStr;
@@ -163,13 +395,16 @@ export default function CalendarSidebar({ tasks, goals }: Props) {
             <button
               key={dateStr}
               onClick={() => setSelectedDate(dateStr)}
-              className="h-9 flex flex-col items-center justify-center gap-0.5 rounded-lg transition-all relative"
+              className="flex flex-col items-center justify-center gap-0.5 transition-all relative"
               style={{
+                height: '38px',
+                borderRadius: '8px',
                 background: isToday
-                  ? 'var(--accent)'
+                  ? '#10b981'
                   : isSelected
                   ? 'var(--accent-soft)'
                   : 'transparent',
+                boxShadow: isToday ? '0 2px 8px rgba(16,185,129,0.35)' : 'none',
                 cursor: 'pointer',
                 border: 'none',
               }}
@@ -181,9 +416,10 @@ export default function CalendarSidebar({ tasks, goals }: Props) {
               }}
             >
               <span
-                className="text-xs leading-none"
                 style={{
-                  fontWeight: isToday ? 700 : 400,
+                  fontSize: '14px',
+                  lineHeight: 1,
+                  fontWeight: isToday ? 700 : isSelected ? 600 : 500,
                   color: isToday
                     ? '#fff'
                     : isSelected
@@ -199,12 +435,12 @@ export default function CalendarSidebar({ tasks, goals }: Props) {
               </span>
               {/* Indicator dots */}
               {(hasTasks || hasGoals) && (
-                <div className="flex gap-px items-center" style={{ height: '3px' }}>
+                <div className="flex gap-0.5 items-center" style={{ height: '4px' }}>
                   {hasTasks && (
-                    <span className="block rounded-full" style={{ width: '3px', height: '3px', background: isToday ? 'rgba(255,255,255,0.7)' : 'var(--text-tertiary)' }} />
+                    <span className="block rounded-full" style={{ width: '4px', height: '4px', background: isToday ? 'rgba(255,255,255,0.8)' : 'var(--text-tertiary)' }} />
                   )}
                   {hasGoals && goalColor && (
-                    <span className="block rounded-full" style={{ width: '3px', height: '3px', background: isToday ? 'rgba(255,255,255,0.9)' : goalColor }} />
+                    <span className="block rounded-full" style={{ width: '4px', height: '4px', background: isToday ? 'rgba(255,255,255,0.9)' : goalColor }} />
                   )}
                 </div>
               )}

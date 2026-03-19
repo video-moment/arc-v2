@@ -112,6 +112,7 @@ export interface PomoGoal {
   description: string;
   status: 'active' | 'completed' | 'archived';
   priority: 'high' | 'medium' | 'low';
+  goalType: 'achievement' | 'series';
   targetDate?: string;
   targetPomodoros?: number;
   color: string;
@@ -119,6 +120,10 @@ export interface PomoGoal {
   completedAt?: string;
   createdAt: string;
   updatedAt: string;
+  projectId?: string;
+  episodeCount: number;
+  episodeTarget?: string;
+  lastEpisodeAt?: string;
 }
 
 export interface MessageReaction {
@@ -263,6 +268,11 @@ function toPomoGoal(row: any): PomoGoal {
     completedAt: row.completed_at ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    projectId: row.project_id ?? undefined,
+    goalType: row.goal_type || 'achievement',
+    episodeCount: row.episode_count ?? 0,
+    episodeTarget: row.episode_target ?? undefined,
+    lastEpisodeAt: row.last_episode_at ?? undefined,
   };
 }
 
@@ -575,9 +585,10 @@ export async function getPomoStats(days = 7): Promise<PomoSession[]> {
 
 // ── Pomodoro Goals ──
 
-export async function getPomoGoals(status?: string): Promise<PomoGoal[]> {
+export async function getPomoGoals(filter?: { status?: string; projectId?: string }): Promise<PomoGoal[]> {
   let query = supabase.from('pomo_goals').select('*').order('sort_order');
-  if (status) query = query.eq('status', status);
+  if (filter?.status) query = query.eq('status', filter.status);
+  if (filter?.projectId) query = query.eq('project_id', filter.projectId);
   const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(toPomoGoal);
@@ -587,9 +598,12 @@ export async function createPomoGoal(input: {
   title: string;
   description?: string;
   priority?: string;
+  goalType?: string;
   targetDate?: string;
   targetPomodoros?: number;
   color?: string;
+  projectId?: string;
+  episodeTarget?: string;
 }): Promise<PomoGoal> {
   const { data, error } = await supabase
     .from('pomo_goals')
@@ -597,9 +611,12 @@ export async function createPomoGoal(input: {
       title: input.title,
       description: input.description || '',
       priority: input.priority || 'medium',
+      goal_type: input.goalType || 'achievement',
       target_date: input.targetDate || null,
       target_pomodoros: input.targetPomodoros || null,
       color: input.color || '#6366f1',
+      project_id: input.projectId || null,
+      episode_target: input.episodeTarget || null,
     })
     .select()
     .single();
@@ -617,6 +634,11 @@ export async function updatePomoGoal(id: string, updates: Partial<{
   color: string;
   sortOrder: number;
   completedAt: string | null;
+  projectId: string | null;
+  goalType: string;
+  episodeCount: number;
+  episodeTarget: string | null;
+  lastEpisodeAt: string | null;
 }>): Promise<PomoGoal> {
   const dbUpdates: Record<string, any> = {};
   if (updates.title !== undefined) dbUpdates.title = updates.title;
@@ -628,6 +650,11 @@ export async function updatePomoGoal(id: string, updates: Partial<{
   if (updates.color !== undefined) dbUpdates.color = updates.color;
   if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
   if (updates.completedAt !== undefined) dbUpdates.completed_at = updates.completedAt;
+  if (updates.projectId !== undefined) dbUpdates.project_id = updates.projectId;
+  if (updates.goalType !== undefined) dbUpdates.goal_type = updates.goalType;
+  if (updates.episodeCount !== undefined) dbUpdates.episode_count = updates.episodeCount;
+  if (updates.episodeTarget !== undefined) dbUpdates.episode_target = updates.episodeTarget;
+  if (updates.lastEpisodeAt !== undefined) dbUpdates.last_episode_at = updates.lastEpisodeAt;
   const { data, error } = await supabase
     .from('pomo_goals')
     .update(dbUpdates)
@@ -641,6 +668,59 @@ export async function updatePomoGoal(id: string, updates: Partial<{
 export async function deletePomoGoal(id: string): Promise<void> {
   const { error } = await supabase.from('pomo_goals').delete().eq('id', id);
   if (error) throw error;
+}
+
+// ── Pomodoro Episodes (Series goals) ──
+
+export interface PomoEpisode {
+  id: string;
+  goalId: string;
+  title: string | null;
+  episodeNumber: number;
+  createdAt: string;
+}
+
+function toPomoEpisode(row: any): PomoEpisode {
+  return {
+    id: row.id,
+    goalId: row.goal_id,
+    title: row.title ?? null,
+    episodeNumber: row.episode_number,
+    createdAt: row.created_at,
+  };
+}
+
+export async function getPomoEpisodes(goalId: string): Promise<PomoEpisode[]> {
+  const { data, error } = await supabase
+    .from('pomo_episodes')
+    .select('*')
+    .eq('goal_id', goalId)
+    .order('episode_number', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(toPomoEpisode);
+}
+
+export async function createPomoEpisode(goalId: string, episodeNumber: number, title?: string): Promise<PomoEpisode> {
+  const { data, error } = await supabase
+    .from('pomo_episodes')
+    .insert({ goal_id: goalId, episode_number: episodeNumber, title: title || null })
+    .select()
+    .single();
+  if (error) throw error;
+  return toPomoEpisode(data);
+}
+
+export async function deletePomoEpisode(id: string): Promise<void> {
+  const { error } = await supabase.from('pomo_episodes').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── Pomodoro Task Reorder ──
+
+export async function reorderPomoTasks(updates: { id: string; sortOrder: number }[]): Promise<void> {
+  await Promise.all(
+    updates.map(u => supabase.from('pomo_tasks').update({ sort_order: u.sortOrder }).eq('id', u.id))
+  );
 }
 
 // ── Pomodoro Milestones ──

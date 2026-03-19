@@ -1,13 +1,16 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { PomoGoal, PomoTask, PomoMilestone } from '@/lib/api';
+import type { PomoGoal, PomoTask, PomoMilestone, PomoEpisode } from '@/lib/api';
 import {
   getPomoMilestones,
   createPomoMilestone,
   updatePomoMilestone,
   deletePomoMilestone,
+  getPomoEpisodes,
+  deletePomoEpisode,
 } from '@/lib/api';
+import type { GoalUpdates } from '@/components/GoalStrip';
 
 interface AgentItem {
   id: string;
@@ -42,15 +45,6 @@ const TASK_STATUS_LABEL: Record<string, string> = {
   completed: '완료',
 };
 
-type GoalUpdates = Partial<{
-  title: string;
-  description: string;
-  status: string;
-  priority: string;
-  targetDate: string | null;
-  color: string;
-  completedAt: string | null;
-}>;
 
 interface Props {
   goal: PomoGoal | null;
@@ -623,6 +617,65 @@ function MilestoneSection({ goalId }: { goalId: string }) {
   );
 }
 
+// ── Episode history section (series goals) ──
+function EpisodeSection({ goalId }: { goalId: string }) {
+  const [episodes, setEpisodes] = useState<PomoEpisode[]>([]);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await getPomoEpisodes(goalId);
+      setEpisodes(data);
+    } catch { /* silently ignore */ }
+  }, [goalId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deletePomoEpisode(id);
+      load();
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+      <h3 style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-tertiary)', margin: '0 0 8px' }}>
+        에피소드 기록 ({episodes.length})
+      </h3>
+      {episodes.length === 0 ? (
+        <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>아직 기록이 없습니다</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', maxHeight: '200px', overflowY: 'auto' }}>
+          {episodes.map(ep => (
+            <div
+              key={ep.id}
+              className="group"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 2px' }}
+            >
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', minWidth: '32px' }}>
+                {ep.episodeNumber}회
+              </span>
+              <span style={{ flex: 1, fontSize: '13px', color: 'var(--text-primary)' }}>
+                {ep.title || ep.episodeNumber + '회차'}
+              </span>
+              <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                {new Date(ep.createdAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}
+              </span>
+              <button
+                onClick={() => handleDelete(ep.id)}
+                className="opacity-0 group-hover:opacity-100"
+                style={{ flexShrink: 0, padding: '1px 4px', border: 'none', background: 'transparent', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '13px', lineHeight: 1, borderRadius: '4px', transition: 'opacity 0.1s ease' }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GoalDetailPanel({ goal, tasks, agents, onClose, onUpdateGoal, onDeleteGoal }: Props) {
   const isOpen = goal !== null;
 
@@ -817,6 +870,11 @@ export default function GoalDetailPanel({ goal, tasks, agents, onClose, onUpdate
             {/* Milestones */}
             <MilestoneSection goalId={goal.id} />
 
+            {/* Episode history — series goals only */}
+            {goal.goalType === 'series' && (
+              <EpisodeSection goalId={goal.id} />
+            )}
+
             {/* My tasks */}
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
               <h3 style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-tertiary)', margin: '0 0 8px' }}>
@@ -954,8 +1012,8 @@ export default function GoalDetailPanel({ goal, tasks, agents, onClose, onUpdate
                   fontWeight: 500,
                   border: 'none',
                   cursor: 'pointer',
-                  background: goal.status === 'completed' ? 'var(--bg-elevated)' : 'var(--accent)',
-                  color: goal.status === 'completed' ? 'var(--text-secondary)' : '#fff',
+                  background: goal.status === 'completed' ? 'var(--btn-secondary)' : 'var(--btn-primary)',
+                  color: goal.status === 'completed' ? 'var(--btn-secondary-text)' : 'var(--btn-primary-text)',
                 }}
               >
                 {goal.status === 'completed' ? '다시 활성화' : '완료 처리'}

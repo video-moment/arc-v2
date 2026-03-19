@@ -93,6 +93,12 @@
   --blue-soft: rgba(59, 130, 246, 0.08);
   --yellow: #eab308;
   --yellow-soft: rgba(234, 179, 8, 0.08);
+  --btn-primary: #7c3aed;
+  --btn-primary-hover: #6d28d9;
+  --btn-primary-text: #ffffff;
+  --btn-secondary: #e5e7eb;
+  --btn-secondary-hover: #d1d5db;
+  --btn-secondary-text: #374151;
 }
 
 /* Dark mode tokens — 모니터링 모드
@@ -145,6 +151,12 @@
   --blue-soft: rgba(96, 165, 250, 0.10);
   --yellow: #fbbf24;
   --yellow-soft: rgba(251, 191, 36, 0.10);
+  --btn-primary: #8b7cf6;
+  --btn-primary-hover: #7c6aed;
+  --btn-primary-text: #ffffff;
+  --btn-secondary: #2c2c31;
+  --btn-secondary-hover: #3a3a40;
+  --btn-secondary-text: #d4d4d8;
 }
 
 /* Sidebar dark mode */
@@ -169,6 +181,11 @@ aside.dark {
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 

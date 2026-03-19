@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
-import type { PomoGoal, PomoTask } from '@/lib/api';
+import { useState, useRef, useMemo, useEffect } from 'react';
+import type { PomoGoal, PomoTask, PomoProject } from '@/lib/api';
 import CustomSelect from '@/components/CustomSelect';
 import CustomDatePicker from '@/components/CustomDatePicker';
 
@@ -24,8 +24,11 @@ export interface CreateGoalInput {
   title: string;
   description?: string;
   priority?: string;
+  goalType?: string;
   targetDate?: string;
   color?: string;
+  projectId?: string;
+  episodeTarget?: string;
 }
 
 interface GoalCardProps {
@@ -34,9 +37,10 @@ interface GoalCardProps {
   isSelected: boolean;
   onSelect: () => void;
   onOpenDetail?: (goal: PomoGoal) => void;
+  onDoubleClick?: () => void;
 }
 
-function GoalCard({ goal, tasks, isSelected, onSelect, onOpenDetail }: GoalCardProps) {
+function GoalCard({ goal, tasks, isSelected, onSelect, onOpenDetail, onDoubleClick }: GoalCardProps) {
   const goalTasks = tasks.filter(t => t.goalId === goal.id);
   const completedCount = goalTasks.filter(t => t.status === 'completed').length;
   const totalEst = goalTasks.reduce((s, t) => s + t.estimatedPomodoros, 0);
@@ -61,6 +65,7 @@ function GoalCard({ goal, tasks, isSelected, onSelect, onOpenDetail }: GoalCardP
   return (
     <div
       onClick={handleClick}
+      onDoubleClick={e => { e.stopPropagation(); onDoubleClick?.(); }}
       style={{
         background: 'var(--bg-elevated)',
         borderRadius: '10px',
@@ -144,7 +149,7 @@ function GoalCard({ goal, tasks, isSelected, onSelect, onOpenDetail }: GoalCardP
                 color: (isOverdue || isDueSoon) ? '#ef4444' : 'var(--text-tertiary)',
               }}
             >
-              {isOverdue ? '기한 초과' : '기한: ' + new Date(goal.targetDate).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}
+              {isOverdue ? new Date(goal.targetDate).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' 초과' : '기한: ' + new Date(goal.targetDate).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}
             </span>
           )}
           <span
@@ -225,28 +230,374 @@ function GridIcon({ active }: { active: boolean }) {
   );
 }
 
+export type GoalUpdates = Partial<{
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  goalType: string;
+  targetDate: string | null;
+  color: string;
+  sortOrder: number;
+  completedAt: string | null;
+  projectId: string | null;
+  episodeCount: number;
+  episodeTarget: string | null;
+  lastEpisodeAt: string | null;
+}>;
+
+// ── Goal Edit Modal ──
+function GoalEditModal({
+  goal,
+  projects,
+  onSave,
+  onClose,
+}: {
+  goal: PomoGoal;
+  projects: PomoProject[];
+  onSave: (id: string, updates: GoalUpdates) => void;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState(goal.title);
+  const [desc, setDesc] = useState(goal.description || '');
+  const [priority, setPriority] = useState<string>(goal.priority);
+  const [targetDate, setTargetDate] = useState(goal.targetDate?.slice(0, 10) || '');
+  const [color, setColor] = useState(goal.color || GOAL_COLORS[0]);
+  const [projectId, setProjectId] = useState(goal.projectId || '');
+  const [episodeTarget, setEpisodeTarget] = useState(goal.episodeTarget || '');
+  const [goalType, setGoalType] = useState<'achievement' | 'series'>(goal.goalType);
+  const isSeries = goalType === 'series';
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    titleRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const handleSave = () => {
+    if (!title.trim()) return;
+    const updates: GoalUpdates = {};
+    if (title.trim() !== goal.title) updates.title = title.trim();
+    if (desc !== (goal.description || '')) updates.description = desc;
+    if (priority !== goal.priority) updates.priority = priority;
+    const newDate = targetDate || null;
+    const oldDate = goal.targetDate?.slice(0, 10) || null;
+    if (newDate !== oldDate) updates.targetDate = newDate;
+    if (color !== (goal.color || GOAL_COLORS[0])) updates.color = color;
+    const newProjId = projectId || null;
+    const oldProjId = goal.projectId || null;
+    if (newProjId !== oldProjId) updates.projectId = newProjId;
+    if (goalType !== goal.goalType) updates.goalType = goalType;
+    if (isSeries) {
+      const newEpTarget = episodeTarget || null;
+      const oldEpTarget = goal.episodeTarget || null;
+      if (newEpTarget !== oldEpTarget) updates.episodeTarget = newEpTarget;
+    }
+    if (Object.keys(updates).length > 0) {
+      onSave(goal.id, updates);
+    }
+    onClose();
+  };
+
+  return (
+    <>
+      {/* Overlay */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.45)',
+          zIndex: 999,
+          backdropFilter: 'blur(2px)',
+        }}
+      />
+      {/* Modal */}
+      <div
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '480px',
+          maxWidth: '92vw',
+          background: 'var(--bg-secondary)',
+          borderRadius: '16px',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
+          zIndex: 1000,
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header with color accent */}
+        <div style={{
+          padding: '20px 24px 16px',
+          borderBottom: '1px solid var(--border-subtle)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: color, flexShrink: 0 }} />
+            <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>목표 수정</span>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ border: 'none', background: 'transparent', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '4px' }}
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {/* Title */}
+          <div>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>제목</label>
+            <input
+              ref={titleRef}
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && title.trim()) handleSave(); }}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-elevated)',
+                color: 'var(--text-primary)',
+                fontSize: '15px',
+                outline: 'none',
+              }}
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>설명</label>
+            <textarea
+              value={desc}
+              onChange={e => setDesc(e.target.value)}
+              rows={3}
+              placeholder="목표에 대한 설명을 입력하세요"
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-elevated)',
+                color: 'var(--text-secondary)',
+                fontSize: '14px',
+                outline: 'none',
+                resize: 'none',
+              }}
+            />
+          </div>
+
+          {/* Type toggle */}
+          <div>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>유형</label>
+            <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '3px' }}>
+              {([['achievement', '달성형'], ['series', '시리즈형']] as const).map(([type, label]) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setGoalType(type)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: goalType === type ? 600 : 400,
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: goalType === type ? 'var(--bg-elevated)' : 'transparent',
+                    color: goalType === type ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    boxShadow: goalType === type ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Project + Priority + Date/EpisodeTarget row */}
+          <div style={{ display: 'flex', gap: '14px' }}>
+            {projects.length > 0 && (
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>프로젝트</label>
+                <CustomSelect
+                  size="md"
+                  value={projectId}
+                  options={[
+                    { value: '', label: '없음' },
+                    ...projects.map(p => ({ value: p.id, label: p.name, color: p.color })),
+                  ]}
+                  onChange={setProjectId}
+                />
+              </div>
+            )}
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>우선순위</label>
+              <CustomSelect
+                size="md"
+                value={priority}
+                options={[
+                  { value: 'high', label: '높음', color: 'var(--red)' },
+                  { value: 'medium', label: '보통', color: 'var(--yellow)' },
+                  { value: 'low', label: '낮음' },
+                ]}
+                onChange={setPriority}
+              />
+            </div>
+            {isSeries ? (
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>목표 주기</label>
+                <input
+                  value={episodeTarget}
+                  onChange={e => setEpisodeTarget(e.target.value)}
+                  placeholder="예: 주 3회"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-subtle)',
+                    background: 'var(--bg-elevated)',
+                    color: 'var(--text-primary)',
+                    fontSize: '13px',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+            ) : (
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>기한</label>
+                <CustomDatePicker
+                  size="md"
+                  value={targetDate}
+                  onChange={setTargetDate}
+                  placeholder="기한 선택"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Color */}
+          <div>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', display: 'block' }}>색상</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {GOAL_COLORS.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    background: c,
+                    border: color === c ? '3px solid var(--text-primary)' : '3px solid transparent',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    padding: 0,
+                    transition: 'border-color 0.15s, transform 0.15s',
+                    transform: color === c ? 'scale(1.15)' : 'scale(1)',
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: '16px 24px 20px',
+          borderTop: '1px solid var(--border-subtle)',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: '10px',
+        }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '9px 20px',
+              borderRadius: '10px',
+              fontSize: '14px',
+              fontWeight: 500,
+              border: 'none',
+              background: 'var(--btn-secondary)',
+              color: 'var(--btn-secondary-text)',
+              cursor: 'pointer',
+            }}
+          >
+            취소
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!title.trim()}
+            style={{
+              padding: '9px 24px',
+              borderRadius: '10px',
+              fontSize: '14px',
+              fontWeight: 600,
+              border: 'none',
+              background: title.trim() ? 'var(--btn-primary)' : 'var(--bg-tertiary)',
+              color: title.trim() ? 'var(--btn-primary-text)' : 'var(--text-tertiary)',
+              cursor: title.trim() ? 'pointer' : 'not-allowed',
+            }}
+          >
+            저장
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 interface Props {
   goals: PomoGoal[];
   tasks: PomoTask[];
+  projects: PomoProject[];
   selectedGoalId: string | null;
+  selectedProjectId: string | null;
   onSelectGoal: (id: string | null) => void;
+  onSelectProject: (id: string | null) => void;
   onCreateGoal: (input: CreateGoalInput) => void;
+  onUpdateGoal: (id: string, updates: GoalUpdates) => void;
+  onAddEpisode?: (goalId: string) => void;
   onOpenDetail?: (goal: PomoGoal) => void;
 }
 
-export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, onCreateGoal, onOpenDetail }: Props) {
+export default function GoalStrip({ goals, tasks, projects, selectedGoalId, selectedProjectId, onSelectGoal, onSelectProject, onCreateGoal, onUpdateGoal, onAddEpisode, onOpenDetail }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [formTitle, setFormTitle] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formPriority, setFormPriority] = useState('medium');
   const [formDate, setFormDate] = useState('');
   const [formColor, setFormColor] = useState(GOAL_COLORS[0]);
+  const [formGoalType, setFormGoalType] = useState<'achievement' | 'series'>('achievement');
+  const [formEpisodeTarget, setFormEpisodeTarget] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
+  const [editingGoal, setEditingGoal] = useState<PomoGoal | null>(null);
+
+  // Filter goals by selected project
+  const filteredGoals = useMemo(() => {
+    if (!selectedProjectId) return goals;
+    return goals.filter(g => g.projectId === selectedProjectId);
+  }, [goals, selectedProjectId]);
   const titleRef = useRef<HTMLInputElement>(null);
 
   const goalStats = useMemo(() => {
     const map = new Map<string, { totalEst: number; totalComp: number }>();
-    for (const goal of goals) {
+    for (const goal of filteredGoals) {
       map.set(goal.id, { totalEst: 0, totalComp: 0 });
     }
     for (const task of tasks) {
@@ -257,7 +608,7 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
       stat.totalComp += task.completedPomodoros;
     }
     return map;
-  }, [goals, tasks]);
+  }, [filteredGoals, tasks]);
 
   const handlePlusClick = () => {
     setShowForm(true);
@@ -280,8 +631,11 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
       title: formTitle.trim(),
       description: formDesc.trim() || undefined,
       priority: formPriority,
-      targetDate: formDate || undefined,
+      goalType: formGoalType,
+      targetDate: formGoalType === 'achievement' ? (formDate || undefined) : undefined,
       color: formColor,
+      projectId: selectedProjectId || undefined,
+      episodeTarget: formGoalType === 'series' ? (formEpisodeTarget || undefined) : undefined,
     });
     setShowForm(false);
     setFormTitle('');
@@ -289,6 +643,8 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
     setFormPriority('medium');
     setFormDate('');
     setFormColor(GOAL_COLORS[0]);
+    setFormGoalType('achievement');
+    setFormEpisodeTarget('');
   };
 
   const handleFormKeyDown = (e: React.KeyboardEvent) => {
@@ -309,12 +665,12 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
 
   // Compute completed goals count (all tasks completed)
   const completedGoalsCount = useMemo(() => {
-    return goals.filter(goal => {
+    return filteredGoals.filter(goal => {
       const goalTasks = tasks.filter(t => t.goalId === goal.id);
       if (goalTasks.length === 0) return false;
       return goalTasks.every(t => t.status === 'completed');
     }).length;
-  }, [goals, tasks]);
+  }, [filteredGoals, tasks]);
 
   return (
     <div>
@@ -327,15 +683,15 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
           >
             목표
           </span>
-          {goals.length > 0 && (
+          {filteredGoals.length > 0 && (
             <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              {goals.length}개 중 {completedGoalsCount}개 완료
+              {filteredGoals.length}개 중 {completedGoalsCount}개 완료
             </span>
           )}
         </div>
 
         {/* View toggle — only show when there are goals */}
-        {goals.length > 0 && (
+        {filteredGoals.length > 0 && (
           <div style={{ display: 'flex', gap: '2px' }}>
             <button
               onClick={() => setViewMode('list')}
@@ -373,8 +729,44 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
         )}
       </div>
 
+      {/* Project tabs */}
+      {projects.length > 0 && (
+        <div className="flex items-center gap-1 mb-3 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+          <button
+            onClick={() => onSelectProject(null)}
+            className="text-xs px-2.5 py-1 rounded-md transition-all flex-shrink-0"
+            style={{
+              background: !selectedProjectId ? 'var(--accent-soft)' : 'transparent',
+              color: !selectedProjectId ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: !selectedProjectId ? 600 : 400,
+            }}
+          >
+            전체
+          </button>
+          {projects.map(p => (
+            <button
+              key={p.id}
+              onClick={() => onSelectProject(selectedProjectId === p.id ? null : p.id)}
+              className="text-xs px-2.5 py-1 rounded-md transition-all flex-shrink-0 flex items-center gap-1.5"
+              style={{
+                background: selectedProjectId === p.id ? 'var(--accent-soft)' : 'transparent',
+                color: selectedProjectId === p.id ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: selectedProjectId === p.id ? 600 : 400,
+              }}
+            >
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Empty state */}
-      {goals.length === 0 && !showForm && (
+      {filteredGoals.length === 0 && !showForm && (
         <div className="mb-3 py-4">
           <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
             목표를 추가하면 진행률을 추적할 수 있습니다
@@ -382,96 +774,138 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
         </div>
       )}
 
-      {/* List view — inline progress list */}
-      {goals.length > 0 && viewMode === 'list' && (
-        <div className="space-y-2 mb-3">
-          {goals.map(goal => {
+      {/* List view — 2-line card with color bar */}
+      {filteredGoals.length > 0 && viewMode === 'list' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
+          {filteredGoals.map(goal => {
             const stat = goalStats.get(goal.id) ?? { totalEst: 0, totalComp: 0 };
             const progress = stat.totalEst > 0 ? Math.min(stat.totalComp / stat.totalEst, 1) : 0;
+            const pct = Math.round(progress * 100);
             const isSelected = selectedGoalId === goal.id;
             const barColor = progress >= 1 ? 'var(--green)' : goal.color || 'var(--accent)';
             const dueSoon = isDueSoon(goal.targetDate);
+            const goalTasks = tasks.filter(t => t.goalId === goal.id);
+            const completedCount = goalTasks.filter(t => t.status === 'completed').length;
+
+            // Deadline info
+            let deadlineLabel = '';
+            let deadlineOverdue = false;
+            let deadlineSoon = false;
+            if (goal.targetDate) {
+              const now = new Date();
+              const target = new Date(goal.targetDate);
+              const daysLeft = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+              deadlineOverdue = daysLeft < 0;
+              deadlineSoon = dueSoon;
+              deadlineLabel = deadlineOverdue
+                ? target.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' 초과'
+                : daysLeft === 0
+                ? 'D-Day'
+                : daysLeft <= 7
+                ? 'D-' + daysLeft
+                : target.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });
+            }
 
             return (
               <div
                 key={goal.id}
-                className="group flex items-center gap-3 cursor-pointer rounded-lg transition-all"
+                className="group cursor-pointer transition-all"
                 style={{
-                  padding: '8px 10px',
-                  background: isSelected ? 'var(--accent-soft)' : 'transparent',
+                  borderRadius: '8px',
+                  background: isSelected ? 'var(--bg-hover)' : 'var(--bg-elevated)',
+                  border: '1px solid var(--border-subtle)',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  transition: 'background 0.15s',
                 }}
                 onClick={() => handleRowClick(goal.id)}
+                onDoubleClick={(e) => { e.stopPropagation(); setEditingGoal(goal); }}
+                onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = isSelected ? 'var(--bg-hover)' : 'var(--bg-elevated)'; }}
               >
-                {/* Selected indicator dot */}
-                <div
-                  className="flex-shrink-0 w-2 h-2 rounded-full transition-all"
-                  style={{
-                    background: isSelected ? (goal.color || 'var(--accent)') : 'transparent',
-                    border: isSelected ? 'none' : '1px solid var(--border-subtle)',
-                  }}
-                />
+                  {/* Row 1: Title + deadline + chevron */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: goal.color || '#6366f1', flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {goal.title}
+                    </span>
 
-                {/* Title */}
-                <span
-                  className="text-sm font-medium flex-shrink-0"
-                  style={{
-                    color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    minWidth: '80px',
-                    maxWidth: '160px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {goal.title}
-                </span>
+                    {deadlineLabel && (
+                      <span
+                        className="flex-shrink-0"
+                        style={{
+                          fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '4px',
+                          color: deadlineOverdue ? '#991b1b' : deadlineSoon ? '#dc2626' : 'var(--text-secondary)',
+                          background: deadlineOverdue ? '#fecaca' : deadlineSoon ? 'rgba(239,68,68,0.08)' : 'var(--bg-tertiary)',
+                        }}
+                      >
+                        {deadlineLabel}
+                      </span>
+                    )}
 
-                {/* Progress bar */}
-                <div
-                  className="flex-1 rounded-full overflow-hidden"
-                  style={{ height: '7px', background: 'var(--bg-tertiary)' }}
-                >
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: (progress * 100) + '%',
-                      background: barColor,
-                      transition: 'width 0.4s ease',
-                    }}
-                  />
-                </div>
+                    {onOpenDetail && (
+                      <span
+                        role="button"
+                        onClick={e => { e.stopPropagation(); onOpenDetail(goal); }}
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
+                        style={{ color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}
+                        title="상세 보기"
+                      >
+                        ›
+                      </span>
+                    )}
+                  </div>
 
-                {/* Percentage */}
-                <span
-                  className="flex-shrink-0 tabular-nums text-sm"
-                  style={{ color: 'var(--text-tertiary)', minWidth: '32px', textAlign: 'right' }}
-                >
-                  {Math.round(progress * 100)}%
-                </span>
-
-                {/* Due soon indicator */}
-                {dueSoon && (
-                  <span
-                    className="flex-shrink-0 text-[10px] leading-none"
-                    style={{ color: 'var(--red, #ef4444)' }}
-                    title="기한 임박"
-                  >
-                    ●
-                  </span>
-                )}
-
-                {/* Detail chevron — hover only */}
-                {onOpenDetail && (
-                  <span
-                    role="button"
-                    onClick={e => { e.stopPropagation(); onOpenDetail(goal); }}
-                    className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity text-sm leading-none"
-                    style={{ color: 'var(--text-tertiary)', cursor: 'pointer', paddingLeft: '2px' }}
-                    title="상세 보기"
-                  >
-                    ›
-                  </span>
-                )}
+                  {/* Row 2: Progress (achievement) or Episode info (series) */}
+                  {goal.goalType === 'series' ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span
+                        className="tabular-nums"
+                        style={{
+                          fontSize: '11px', fontWeight: 600,
+                          color: goal.color || '#6366f1',
+                          background: (goal.color || '#6366f1') + '15',
+                          padding: '2px 8px', borderRadius: '6px',
+                        }}
+                      >
+                        {goal.episodeCount}회
+                      </span>
+                      {goal.episodeTarget && (
+                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>목표 {goal.episodeTarget}</span>
+                      )}
+                      {goal.lastEpisodeAt && (
+                        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                          · 최근 {new Date(goal.lastEpisodeAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}
+                        </span>
+                      )}
+                      <div style={{ flex: 1 }} />
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          onAddEpisode ? onAddEpisode(goal.id) : onUpdateGoal(goal.id, { episodeCount: goal.episodeCount + 1, lastEpisodeAt: new Date().toISOString() });
+                        }}
+                        style={{ padding: '3px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, border: 'none', background: goal.color || '#6366f1', color: '#fff', cursor: 'pointer' }}
+                      >
+                        +1
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ flex: 1, height: '4px', borderRadius: '2px', background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', borderRadius: '2px', width: pct + '%', background: barColor, transition: 'width 0.4s ease' }} />
+                      </div>
+                      <span className="tabular-nums flex-shrink-0" style={{ fontSize: '12px', fontWeight: 600, color: barColor, minWidth: '32px', textAlign: 'right' }}>
+                        {pct}%
+                      </span>
+                      {goalTasks.length > 0 && (
+                        <span className="flex-shrink-0" style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                          {completedCount}/{goalTasks.length}
+                        </span>
+                      )}
+                    </div>
+                  )}
               </div>
             );
           })}
@@ -479,7 +913,7 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
       )}
 
       {/* Card view — grid */}
-      {goals.length > 0 && viewMode === 'card' && (
+      {filteredGoals.length > 0 && viewMode === 'card' && (
         <div
           style={{
             display: 'grid',
@@ -488,7 +922,7 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
             marginBottom: '12px',
           }}
         >
-          {goals.map(goal => (
+          {filteredGoals.map(goal => (
             <GoalCard
               key={goal.id}
               goal={goal}
@@ -496,6 +930,7 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
               isSelected={selectedGoalId === goal.id}
               onSelect={() => handleRowClick(goal.id)}
               onOpenDetail={onOpenDetail}
+              onDoubleClick={() => setEditingGoal(goal)}
             />
           ))}
         </div>
@@ -522,6 +957,32 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
               }}
             />
 
+            {/* Type toggle */}
+            <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '2px' }}>
+              {([['achievement', '달성형'], ['series', '시리즈형']] as const).map(([type, label]) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFormGoalType(type)}
+                  style={{
+                    flex: 1,
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: formGoalType === type ? 600 : 400,
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: formGoalType === type ? 'var(--bg-elevated)' : 'transparent',
+                    color: formGoalType === type ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    boxShadow: formGoalType === type ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
             {/* Description textarea */}
             <textarea
               value={formDesc}
@@ -546,13 +1007,29 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
                 onChange={setFormPriority}
               />
 
-              {/* Date */}
-              <CustomDatePicker
-                size="sm"
-                value={formDate}
-                onChange={setFormDate}
-                placeholder="기한"
-              />
+              {/* Date or Episode target */}
+              {formGoalType === 'achievement' ? (
+                <CustomDatePicker
+                  size="sm"
+                  value={formDate}
+                  onChange={setFormDate}
+                  placeholder="기한"
+                />
+              ) : (
+                <input
+                  value={formEpisodeTarget}
+                  onChange={e => setFormEpisodeTarget(e.target.value)}
+                  placeholder="목표 주기 (예: 주 3회)"
+                  className="text-xs outline-none rounded-md"
+                  style={{
+                    padding: '4px 8px',
+                    background: 'var(--bg-tertiary)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-subtle)',
+                    width: '120px',
+                  }}
+                />
+              )}
 
               {/* Color dots */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginLeft: '2px' }}>
@@ -583,8 +1060,8 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
               <button
                 type="button"
                 onClick={handleCancel}
-                className="text-xs px-3 py-1 rounded-md transition-colors"
-                style={{ color: 'var(--text-tertiary)', background: 'transparent' }}
+                className="text-xs px-3 py-1.5 rounded-md transition-colors"
+                style={{ color: 'var(--btn-secondary-text)', background: 'var(--btn-secondary)' }}
               >
                 취소
               </button>
@@ -592,10 +1069,10 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
                 type="button"
                 onClick={handleCreate}
                 disabled={!formTitle.trim()}
-                className="text-xs px-3 py-1 rounded-md transition-all"
+                className="text-xs px-3 py-1.5 rounded-md transition-all font-medium"
                 style={{
-                  background: formTitle.trim() ? 'var(--accent)' : 'var(--bg-tertiary)',
-                  color: formTitle.trim() ? '#fff' : 'var(--text-tertiary)',
+                  background: formTitle.trim() ? 'var(--btn-primary)' : 'var(--bg-tertiary)',
+                  color: formTitle.trim() ? 'var(--btn-primary-text)' : 'var(--text-tertiary)',
                   cursor: formTitle.trim() ? 'pointer' : 'not-allowed',
                 }}
               >
@@ -619,6 +1096,16 @@ export default function GoalStrip({ goals, tasks, selectedGoalId, onSelectGoal, 
             + 목표 추가
           </button>
         </div>
+      )}
+
+      {/* Edit modal */}
+      {editingGoal && (
+        <GoalEditModal
+          goal={editingGoal}
+          projects={projects}
+          onSave={onUpdateGoal}
+          onClose={() => setEditingGoal(null)}
+        />
       )}
     </div>
   );

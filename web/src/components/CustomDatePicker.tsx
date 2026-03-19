@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 interface Props {
   value: string; // YYYY-MM-DD or ''
@@ -48,16 +49,14 @@ function ChevronRight({ size }: { size: number }) {
 }
 
 function buildCalendarGrid(year: number, month: number): (Date | null)[][] {
-  // month: 0-indexed
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
-  const startDow = firstDay.getDay(); // 0=Sun
+  const startDow = firstDay.getDay();
   const totalDays = lastDay.getDate();
 
   const cells: (Date | null)[] = [];
   for (let i = 0; i < startDow; i++) cells.push(null);
   for (let d = 1; d <= totalDays; d++) cells.push(new Date(year, month, d));
-  // pad to full rows
   while (cells.length % 7 !== 0) cells.push(null);
 
   const rows: (Date | null)[][] = [];
@@ -89,10 +88,11 @@ export default function CustomDatePicker({ value, onChange, placeholder = '날�
 
   const [open, setOpen] = useState(false);
   const [viewYear, setViewYear] = useState(initYear);
-  const [viewMonth, setViewMonth] = useState(initMonth); // 0-indexed
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [viewMonth, setViewMonth] = useState(initMonth);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
 
-  // Sync view when value changes from outside
   useEffect(() => {
     if (value) {
       setViewYear(parseInt(value.slice(0, 4)));
@@ -100,20 +100,38 @@ export default function CustomDatePicker({ value, onChange, placeholder = '날�
     }
   }, [value]);
 
-  // Close on outside click
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const popupHeight = 340;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow < popupHeight ? rect.top - popupHeight - 4 : rect.bottom + 4;
+    setPos({ top, left: rect.left });
+  }, []);
+
   useEffect(() => {
     if (!open) return;
+    updatePosition();
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        popupRef.current && !popupRef.current.contains(target)
+      ) {
         setOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [open, updatePosition]);
 
   const isSm = size === 'sm';
-
   const rows = buildCalendarGrid(viewYear, viewMonth);
 
   const prevMonth = () => {
@@ -159,10 +177,140 @@ export default function CustomDatePicker({ value, onChange, placeholder = '날�
     whiteSpace: 'nowrap',
   };
 
+  const popup = open && typeof document !== 'undefined' ? createPortal(
+    <div
+      ref={popupRef}
+      style={{
+        position: 'fixed',
+        top: pos.top + 'px',
+        left: pos.left + 'px',
+        width: '280px',
+        background: 'var(--bg-elevated)',
+        borderRadius: '10px',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
+        zIndex: 9999,
+        overflow: 'hidden',
+        padding: '12px',
+        animation: 'fadeInUp 0.15s ease',
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <button
+          type="button"
+          onClick={prevMonth}
+          style={{
+            width: '26px', height: '26px', borderRadius: '6px',
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+          {viewYear}년 {viewMonth + 1}월
+        </span>
+        <button
+          type="button"
+          onClick={nextMonth}
+          style={{
+            width: '26px', height: '26px', borderRadius: '6px',
+            border: 'none', background: 'transparent', cursor: 'pointer',
+            color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
+
+      {/* Day-of-week header */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '4px' }}>
+        {DAYS_KR.map((d, i) => (
+          <div
+            key={d}
+            style={{
+              textAlign: 'center', fontSize: '11px', fontWeight: 600,
+              color: i === 0 ? 'var(--red, #ef4444)' : i === 6 ? 'var(--accent)' : 'var(--text-tertiary)',
+              padding: '2px 0',
+            }}
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Date grid */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        {rows.map((row, ri) => (
+          <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
+            {row.map((date, ci) => {
+              if (!date) return <div key={ci} />;
+              const ymd = toYMD(date);
+              const isToday = ymd === todayYMD;
+              const isSelected = ymd === value;
+              const isCurrentMonth = date.getMonth() === viewMonth;
+
+              return (
+                <button
+                  key={ci}
+                  type="button"
+                  onClick={() => handleSelect(date)}
+                  style={{
+                    width: '32px', height: '32px', borderRadius: '50%',
+                    border: 'none', cursor: 'pointer', fontSize: '12px',
+                    fontWeight: isToday || isSelected ? 600 : 400,
+                    background: isSelected ? '#10b981' : isToday ? 'rgba(16,185,129,0.15)' : 'transparent',
+                    color: isSelected ? '#fff' : isToday ? '#10b981' : isCurrentMonth ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    opacity: isCurrentMonth ? 1 : 0.4,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    margin: '0 auto', transition: 'background 0.1s ease',
+                  }}
+                  onMouseEnter={e => {
+                    if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+                  }}
+                  onMouseLeave={e => {
+                    if (!isSelected) (e.currentTarget as HTMLElement).style.background = isToday ? 'rgba(16,185,129,0.15)' : 'transparent';
+                  }}
+                >
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={{ display: 'flex', gap: '6px', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
+        <button
+          type="button" onClick={handleToday}
+          style={{ flex: 1, padding: '5px 8px', borderRadius: '6px', fontSize: '11px', border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          오늘
+        </button>
+        <button
+          type="button" onClick={handleClear}
+          style={{ flex: 1, padding: '5px 8px', borderRadius: '6px', fontSize: '11px', border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-tertiary)', cursor: 'pointer' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          초기화
+        </button>
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
   return (
-    <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
-      {/* Trigger */}
+    <div style={{ display: 'inline-block' }}>
       <button
+        ref={triggerRef}
         type="button"
         style={triggerStyle}
         onClick={() => setOpen(o => !o)}
@@ -172,205 +320,7 @@ export default function CustomDatePicker({ value, onChange, placeholder = '날�
         </span>
         <span>{value ? formatDisplay(value) : placeholder}</span>
       </button>
-
-      {/* Calendar popup */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 'calc(100% + 4px)',
-          left: 0,
-          width: '280px',
-          background: 'var(--bg-elevated)',
-          borderRadius: '10px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.06)',
-          zIndex: 50,
-          overflow: 'hidden',
-          opacity: open ? 1 : 0,
-          transform: open ? 'translateY(0)' : 'translateY(-4px)',
-          pointerEvents: open ? 'auto' : 'none',
-          transition: 'opacity 0.15s ease, transform 0.15s ease',
-          padding: '12px',
-        }}
-      >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-          <button
-            type="button"
-            onClick={prevMonth}
-            style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '6px',
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              color: 'var(--text-tertiary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-          >
-            <ChevronLeft size={14} />
-          </button>
-
-          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            {viewYear}년 {viewMonth + 1}월
-          </span>
-
-          <button
-            type="button"
-            onClick={nextMonth}
-            style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '6px',
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              color: 'var(--text-tertiary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-          >
-            <ChevronRight size={14} />
-          </button>
-        </div>
-
-        {/* Day-of-week header */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '4px' }}>
-          {DAYS_KR.map((d, i) => (
-            <div
-              key={d}
-              style={{
-                textAlign: 'center',
-                fontSize: '11px',
-                fontWeight: 600,
-                color: i === 0 ? 'var(--red, #ef4444)' : i === 6 ? 'var(--accent)' : 'var(--text-tertiary)',
-                padding: '2px 0',
-              }}
-            >
-              {d}
-            </div>
-          ))}
-        </div>
-
-        {/* Date grid */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {rows.map((row, ri) => (
-            <div key={ri} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
-              {row.map((date, ci) => {
-                if (!date) {
-                  return <div key={ci} />;
-                }
-                const ymd = toYMD(date);
-                const isToday = ymd === todayYMD;
-                const isSelected = ymd === value;
-                const isCurrentMonth = date.getMonth() === viewMonth;
-
-                return (
-                  <button
-                    key={ci}
-                    type="button"
-                    onClick={() => handleSelect(date)}
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      fontWeight: isToday || isSelected ? 600 : 400,
-                      background: isSelected
-                        ? 'var(--accent)'
-                        : isToday
-                        ? 'var(--accent-soft)'
-                        : 'transparent',
-                      color: isSelected
-                        ? '#fff'
-                        : isToday
-                        ? 'var(--accent)'
-                        : isCurrentMonth
-                        ? 'var(--text-primary)'
-                        : 'var(--text-tertiary)',
-                      opacity: isCurrentMonth ? 1 : 0.4,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      margin: '0 auto',
-                      transition: 'background 0.1s ease',
-                    }}
-                    onMouseEnter={e => {
-                      if (!isSelected) {
-                        (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-                      }
-                    }}
-                    onMouseLeave={e => {
-                      if (!isSelected) {
-                        (e.currentTarget as HTMLElement).style.background = isToday ? 'var(--accent-soft)' : 'transparent';
-                      }
-                    }}
-                  >
-                    {date.getDate()}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-
-        {/* Footer buttons */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '6px',
-            marginTop: '10px',
-            paddingTop: '8px',
-            borderTop: '1px solid var(--border-subtle)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={handleToday}
-            style={{
-              flex: 1,
-              padding: '5px 8px',
-              borderRadius: '6px',
-              fontSize: '11px',
-              border: '1px solid var(--border-subtle)',
-              background: 'transparent',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-          >
-            오늘
-          </button>
-          <button
-            type="button"
-            onClick={handleClear}
-            style={{
-              flex: 1,
-              padding: '5px 8px',
-              borderRadius: '6px',
-              fontSize: '11px',
-              border: '1px solid var(--border-subtle)',
-              background: 'transparent',
-              color: 'var(--text-tertiary)',
-              cursor: 'pointer',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-          >
-            초기화
-          </button>
-        </div>
-      </div>
+      {popup}
     </div>
   );
 }

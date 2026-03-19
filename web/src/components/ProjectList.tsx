@@ -355,10 +355,10 @@ export default function ProjectList({
               ))}
             </div>
             <div className="flex gap-2">
-              <button type="submit" className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: 'var(--accent)', color: '#fff' }}>
+              <button type="submit" className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: 'var(--btn-primary)', color: 'var(--btn-primary-text)' }}>
                 추가
               </button>
-              <button type="button" onClick={() => setShowProjectForm(false)} className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
+              <button type="button" onClick={() => setShowProjectForm(false)} className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: 'var(--btn-secondary)', color: 'var(--btn-secondary-text)' }}>
                 취소
               </button>
             </div>
@@ -367,7 +367,7 @@ export default function ProjectList({
           <button
             onClick={() => setShowProjectForm(true)}
             className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all"
-            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+            style={{ background: 'var(--btn-secondary)', color: 'var(--btn-secondary-text)' }}
           >
             <PlusIcon size={12} /> 프로젝트 추가
           </button>
