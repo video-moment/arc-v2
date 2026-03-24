@@ -251,9 +251,10 @@ export default function PomodoroPage() {
   }, [tasks]);
 
   // Handlers
+  const [creating, setCreating] = useState(false);
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTaskTitle.trim()) return;
+    if (!newTaskTitle.trim() || creating) return;
 
     const input: Parameters<typeof createPomoTask>[0] = {
       title: newTaskTitle.trim(),
@@ -273,16 +274,24 @@ export default function PomodoroPage() {
       input.projectId = selectedProjectId;
     }
 
-    await createPomoTask(input);
-    setNewTaskTitle('');
-    setNewTaskDueDate('');
-    setNewTaskCategory('');
-    setNewTaskGoalId('');
-    setNewTaskAssignee('me');
-    setNewTaskAgentId('');
-    // Quick Add stays open — refocus for continuous entry
-    quickAddInputRef.current?.focus();
-    load();
+    setCreating(true);
+    try {
+      await createPomoTask(input);
+      setNewTaskTitle('');
+      setNewTaskDueDate('');
+      setNewTaskCategory('');
+      setNewTaskGoalId('');
+      setNewTaskAssignee('me');
+      setNewTaskAgentId('');
+      // Quick Add stays open — refocus for continuous entry
+      quickAddInputRef.current?.focus();
+      await load();
+    } catch (err) {
+      console.error('할일 추가 실패:', err);
+      alert('할일 추가에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handleToggleComplete = async (task: PomoTask) => {
@@ -623,10 +632,11 @@ export default function PomodoroPage() {
                   {newTaskTitle.trim() && (
                     <button
                       type="submit"
+                      disabled={creating}
                       className="px-2.5 py-1 rounded-md text-xs font-medium transition-all flex-shrink-0"
-                      style={{ background: 'var(--btn-primary)', color: 'var(--btn-primary-text)' }}
+                      style={{ background: 'var(--btn-primary)', color: 'var(--btn-primary-text)', opacity: creating ? 0.5 : 1 }}
                     >
-                      추가
+                      {creating ? '추가 중...' : '추가'}
                     </button>
                   )}
                 </div>

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Monitor, Users, UserCircle, TrendingUp, MessagesSquare, ScrollText,
-  Timer, FileText, ChevronLeft, ChevronRight, Layers, Eye, Pencil,
+  Timer, FileText, ChevronLeft, ChevronRight, Layers, Eye, Pencil, CalendarDays,
 } from 'lucide-react';
 
 import { useSidebar, type AppMode } from './SidebarContext';
@@ -53,6 +53,7 @@ const WORKSPACE_SECTIONS: NavSection[] = [
     label: '도구',
     items: [
       { href: '/pomodoro', label: '할 일', icon: <Timer size={18} /> },
+      { href: '/pomodoro/weekly', label: '주간 리뷰', icon: <CalendarDays size={18} /> },
       { href: '/notes', label: '노트', icon: <FileText size={18} /> },
     ],
   },

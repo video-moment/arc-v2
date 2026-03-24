@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useMemo, useEffect } from 'react';
+import { Code2, Video, Settings, Palette, BookOpen, MoreHorizontal, Target } from 'lucide-react';
 import type { PomoGoal, PomoTask, PomoProject } from '@/lib/api';
 import CustomSelect from '@/components/CustomSelect';
 import CustomDatePicker from '@/components/CustomDatePicker';
@@ -29,6 +30,30 @@ export interface CreateGoalInput {
   color?: string;
   projectId?: string;
   episodeTarget?: string;
+  category?: string;
+}
+
+const GOAL_CATEGORIES = [
+  { value: '', label: '없음' },
+  { value: 'dev', label: '개발' },
+  { value: 'video', label: '영상' },
+  { value: 'ops', label: '운영' },
+  { value: 'design', label: '디자인' },
+  { value: 'study', label: '학습' },
+  { value: 'etc', label: '기타' },
+];
+
+function CategoryIcon({ category, size = 14, color }: { category?: string; size?: number; color?: string }) {
+  const style = { color: color || 'var(--text-tertiary)', flexShrink: 0 } as const;
+  switch (category) {
+    case 'dev': return <Code2 size={size} style={style} />;
+    case 'video': return <Video size={size} style={style} />;
+    case 'ops': return <Settings size={size} style={style} />;
+    case 'design': return <Palette size={size} style={style} />;
+    case 'study': return <BookOpen size={size} style={style} />;
+    case 'etc': return <MoreHorizontal size={size} style={style} />;
+    default: return <Target size={size} style={style} />;
+  }
 }
 
 interface GoalCardProps {
@@ -85,18 +110,22 @@ function GoalCard({ goal, tasks, isSelected, onSelect, onOpenDetail, onDoubleCli
       <div style={{ height: '3px', background: goal.color || 'var(--accent)' }} />
 
       <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {/* Title */}
-        <div
-          style={{
-            fontSize: '13px',
-            fontWeight: 600,
-            color: 'var(--text-primary)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {goal.title}
+        {/* Title + Category icon */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+          <CategoryIcon category={goal.category} size={15} color={goal.color || '#6366f1'} />
+          <div
+            style={{
+              fontSize: '13px',
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              flex: 1,
+            }}
+          >
+            {goal.title}
+          </div>
         </div>
 
         {/* Progress bar */}
@@ -244,6 +273,7 @@ export type GoalUpdates = Partial<{
   episodeCount: number;
   episodeTarget: string | null;
   lastEpisodeAt: string | null;
+  category: string | null;
 }>;
 
 // ── Goal Edit Modal ──
@@ -266,6 +296,7 @@ function GoalEditModal({
   const [projectId, setProjectId] = useState(goal.projectId || '');
   const [episodeTarget, setEpisodeTarget] = useState(goal.episodeTarget || '');
   const [goalType, setGoalType] = useState<'achievement' | 'series'>(goal.goalType);
+  const [category, setCategory] = useState(goal.category || '');
   const isSeries = goalType === 'series';
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -295,6 +326,9 @@ function GoalEditModal({
     const oldProjId = goal.projectId || null;
     if (newProjId !== oldProjId) updates.projectId = newProjId;
     if (goalType !== goal.goalType) updates.goalType = goalType;
+    const newCat = category || null;
+    const oldCat = goal.category || null;
+    if (newCat !== oldCat) updates.category = newCat;
     if (isSeries) {
       const newEpTarget = episodeTarget || null;
       const oldEpTarget = goal.episodeTarget || null;
@@ -429,7 +463,7 @@ function GoalEditModal({
             </div>
           </div>
 
-          {/* Project + Priority + Date/EpisodeTarget row */}
+          {/* Project + Category + Priority + Date/EpisodeTarget row */}
           <div style={{ display: 'flex', gap: '14px' }}>
             {projects.length > 0 && (
               <div style={{ flex: 1 }}>
@@ -445,6 +479,15 @@ function GoalEditModal({
                 />
               </div>
             )}
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>카테고리</label>
+              <CustomSelect
+                size="md"
+                value={category}
+                options={GOAL_CATEGORIES}
+                onChange={setCategory}
+              />
+            </div>
             <div style={{ flex: 1 }}>
               <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', display: 'block' }}>우선순위</label>
               <CustomSelect
@@ -585,6 +628,7 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
   const [formColor, setFormColor] = useState(GOAL_COLORS[0]);
   const [formGoalType, setFormGoalType] = useState<'achievement' | 'series'>('achievement');
   const [formEpisodeTarget, setFormEpisodeTarget] = useState('');
+  const [formCategory, setFormCategory] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
   const [editingGoal, setEditingGoal] = useState<PomoGoal | null>(null);
 
@@ -636,6 +680,7 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
       color: formColor,
       projectId: selectedProjectId || undefined,
       episodeTarget: formGoalType === 'series' ? (formEpisodeTarget || undefined) : undefined,
+      category: formCategory || undefined,
     });
     setShowForm(false);
     setFormTitle('');
@@ -645,6 +690,7 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
     setFormColor(GOAL_COLORS[0]);
     setFormGoalType('achievement');
     setFormEpisodeTarget('');
+    setFormCategory('');
   };
 
   const handleFormKeyDown = (e: React.KeyboardEvent) => {
@@ -827,7 +873,7 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
               >
                   {/* Row 1: Title + deadline + chevron */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: goal.color || '#6366f1', flexShrink: 0 }} />
+                    <CategoryIcon category={goal.category} size={14} color={goal.color || '#6366f1'} />
                     <span style={{ flex: 1, fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {goal.title}
                     </span>
@@ -995,6 +1041,15 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
 
             {/* Options row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {/* Category */}
+              <CustomSelect
+                size="sm"
+                value={formCategory}
+                options={GOAL_CATEGORIES}
+                onChange={setFormCategory}
+                placeholder="카테고리"
+              />
+
               {/* Priority */}
               <CustomSelect
                 size="sm"

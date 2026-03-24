@@ -124,6 +124,7 @@ export interface PomoGoal {
   episodeCount: number;
   episodeTarget?: string;
   lastEpisodeAt?: string;
+  category?: string;
 }
 
 export interface MessageReaction {
@@ -273,6 +274,7 @@ function toPomoGoal(row: any): PomoGoal {
     episodeCount: row.episode_count ?? 0,
     episodeTarget: row.episode_target ?? undefined,
     lastEpisodeAt: row.last_episode_at ?? undefined,
+    category: row.category ?? undefined,
   };
 }
 
@@ -604,6 +606,7 @@ export async function createPomoGoal(input: {
   color?: string;
   projectId?: string;
   episodeTarget?: string;
+  category?: string;
 }): Promise<PomoGoal> {
   const { data, error } = await supabase
     .from('pomo_goals')
@@ -617,6 +620,7 @@ export async function createPomoGoal(input: {
       color: input.color || '#6366f1',
       project_id: input.projectId || null,
       episode_target: input.episodeTarget || null,
+      category: input.category || null,
     })
     .select()
     .single();
@@ -639,6 +643,7 @@ export async function updatePomoGoal(id: string, updates: Partial<{
   episodeCount: number;
   episodeTarget: string | null;
   lastEpisodeAt: string | null;
+  category: string | null;
 }>): Promise<PomoGoal> {
   const dbUpdates: Record<string, any> = {};
   if (updates.title !== undefined) dbUpdates.title = updates.title;
@@ -655,6 +660,7 @@ export async function updatePomoGoal(id: string, updates: Partial<{
   if (updates.episodeCount !== undefined) dbUpdates.episode_count = updates.episodeCount;
   if (updates.episodeTarget !== undefined) dbUpdates.episode_target = updates.episodeTarget;
   if (updates.lastEpisodeAt !== undefined) dbUpdates.last_episode_at = updates.lastEpisodeAt;
+  if (updates.category !== undefined) dbUpdates.category = updates.category;
   const { data, error } = await supabase
     .from('pomo_goals')
     .update(dbUpdates)
