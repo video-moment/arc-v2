@@ -7,8 +7,8 @@ import {
   Code2, Video, Settings, Palette, BookOpen, MoreHorizontal,
 } from 'lucide-react';
 import {
-  getPomoTasks, getPomoGoals, getPomoProjects,
-  type PomoTask, type PomoGoal, type PomoProject,
+  getTasks, getTaskGoals, getTaskProjects,
+  type Task, type TaskGoal, type TaskProject,
 } from '@/lib/api';
 
 // ── Helpers ──
@@ -67,9 +67,9 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 export default function WeeklyDashboard() {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [tasks, setTasks] = useState<PomoTask[]>([]);
-  const [goals, setGoals] = useState<PomoGoal[]>([]);
-  const [projects, setProjects] = useState<PomoProject[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [goals, setGoals] = useState<TaskGoal[]>([]);
+  const [projects, setProjects] = useState<TaskProject[]>([]);
   const [loading, setLoading] = useState(true);
 
   const week = useMemo(() => getWeekRange(weekOffset), [weekOffset]);
@@ -79,9 +79,9 @@ export default function WeeklyDashboard() {
     setLoading(true);
     try {
       const [t, g, p] = await Promise.all([
-        getPomoTasks(),
-        getPomoGoals(),
-        getPomoProjects(),
+        getTasks(),
+        getTaskGoals(),
+        getTaskProjects(),
       ]);
       setTasks(t);
       setGoals(g);
@@ -124,7 +124,7 @@ export default function WeeklyDashboard() {
 
   // Daily breakdown
   const dailyData = useMemo(() => {
-    const days: { date: string; label: string; completed: PomoTask[]; created: PomoTask[] }[] = [];
+    const days: { date: string; label: string; completed: Task[]; created: Task[] }[] = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(week.start);
       d.setDate(d.getDate() + i);

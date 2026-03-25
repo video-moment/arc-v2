@@ -2,7 +2,7 @@
 
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { Code2, Video, Settings, Palette, BookOpen, MoreHorizontal, Target } from 'lucide-react';
-import type { PomoGoal, PomoTask, PomoProject } from '@/lib/api';
+import type { TaskGoal, Task, TaskProject } from '@/lib/api';
 import CustomSelect from '@/components/CustomSelect';
 import CustomDatePicker from '@/components/CustomDatePicker';
 
@@ -57,20 +57,19 @@ function CategoryIcon({ category, size = 14, color }: { category?: string; size?
 }
 
 interface GoalCardProps {
-  goal: PomoGoal;
-  tasks: PomoTask[];
+  goal: TaskGoal;
+  tasks: Task[];
   isSelected: boolean;
   onSelect: () => void;
-  onOpenDetail?: (goal: PomoGoal) => void;
+  onOpenDetail?: (goal: TaskGoal) => void;
   onDoubleClick?: () => void;
 }
 
 function GoalCard({ goal, tasks, isSelected, onSelect, onOpenDetail, onDoubleClick }: GoalCardProps) {
   const goalTasks = tasks.filter(t => t.goalId === goal.id);
   const completedCount = goalTasks.filter(t => t.status === 'completed').length;
-  const totalEst = goalTasks.reduce((s, t) => s + t.estimatedPomodoros, 0);
-  const totalComp = goalTasks.reduce((s, t) => s + t.completedPomodoros, 0);
-  const progress = totalEst > 0 ? Math.min(totalComp / totalEst, 1) : 0;
+  const totalCount = goalTasks.length;
+  const progress = totalCount > 0 ? Math.min(completedCount / totalCount, 1) : 0;
   const progressPct = Math.round(progress * 100);
   const barColor = progress >= 1 ? 'var(--green)' : goal.color || 'var(--accent)';
 
@@ -283,8 +282,8 @@ function GoalEditModal({
   onSave,
   onClose,
 }: {
-  goal: PomoGoal;
-  projects: PomoProject[];
+  goal: TaskGoal;
+  projects: TaskProject[];
   onSave: (id: string, updates: GoalUpdates) => void;
   onClose: () => void;
 }) {
@@ -606,9 +605,9 @@ function GoalEditModal({
 }
 
 interface Props {
-  goals: PomoGoal[];
-  tasks: PomoTask[];
-  projects: PomoProject[];
+  goals: TaskGoal[];
+  tasks: Task[];
+  projects: TaskProject[];
   selectedGoalId: string | null;
   selectedProjectId: string | null;
   onSelectGoal: (id: string | null) => void;
@@ -616,7 +615,7 @@ interface Props {
   onCreateGoal: (input: CreateGoalInput) => void;
   onUpdateGoal: (id: string, updates: GoalUpdates) => void;
   onAddEpisode?: (goalId: string) => void;
-  onOpenDetail?: (goal: PomoGoal) => void;
+  onOpenDetail?: (goal: TaskGoal) => void;
 }
 
 export default function GoalStrip({ goals, tasks, projects, selectedGoalId, selectedProjectId, onSelectGoal, onSelectProject, onCreateGoal, onUpdateGoal, onAddEpisode, onOpenDetail }: Props) {
@@ -630,7 +629,7 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
   const [formEpisodeTarget, setFormEpisodeTarget] = useState('');
   const [formCategory, setFormCategory] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
-  const [editingGoal, setEditingGoal] = useState<PomoGoal | null>(null);
+  const [editingGoal, setEditingGoal] = useState<TaskGoal | null>(null);
 
   // Filter goals by selected project
   const filteredGoals = useMemo(() => {
@@ -640,16 +639,16 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
   const titleRef = useRef<HTMLInputElement>(null);
 
   const goalStats = useMemo(() => {
-    const map = new Map<string, { totalEst: number; totalComp: number }>();
+    const map = new Map<string, { total: number; completed: number }>();
     for (const goal of filteredGoals) {
-      map.set(goal.id, { totalEst: 0, totalComp: 0 });
+      map.set(goal.id, { total: 0, completed: 0 });
     }
     for (const task of tasks) {
       if (!task.goalId) continue;
       const stat = map.get(task.goalId);
       if (!stat) continue;
-      stat.totalEst += task.estimatedPomodoros;
-      stat.totalComp += task.completedPomodoros;
+      stat.total++;
+      if (task.status === 'completed') stat.completed++;
     }
     return map;
   }, [filteredGoals, tasks]);
@@ -824,8 +823,8 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
       {filteredGoals.length > 0 && viewMode === 'list' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
           {filteredGoals.map(goal => {
-            const stat = goalStats.get(goal.id) ?? { totalEst: 0, totalComp: 0 };
-            const progress = stat.totalEst > 0 ? Math.min(stat.totalComp / stat.totalEst, 1) : 0;
+            const stat = goalStats.get(goal.id) ?? { total: 0, completed: 0 };
+            const progress = stat.total > 0 ? Math.min(stat.completed / stat.total, 1) : 0;
             const pct = Math.round(progress * 100);
             const isSelected = selectedGoalId === goal.id;
             const barColor = progress >= 1 ? 'var(--green)' : goal.color || 'var(--accent)';

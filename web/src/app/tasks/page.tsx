@@ -12,12 +12,12 @@ import { DndContext, closestCenter, type DragEndEvent, PointerSensor, useSensor,
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  type PomoProject, type PomoSubproject, type PomoTask, type PomoGoal,
-  getPomoProjects, getPomoSubprojects,
-  getPomoTasks, createPomoTask, updatePomoTask, deletePomoTask,
-  getPomoGoals, createPomoGoal, updatePomoGoal, deletePomoGoal,
-  createPomoProject, deletePomoProject, updatePomoProject,
-  createPomoEpisode, reorderPomoTasks,
+  type TaskProject, type TaskSubproject, type Task, type TaskGoal,
+  getTaskProjects, getTaskSubprojects,
+  getTasks, createTask, updateTask, deleteTask,
+  getTaskGoals, createTaskGoal, updateTaskGoal, deleteTaskGoal,
+  createTaskProject, deleteTaskProject, updateTaskProject,
+  createTaskEpisode, reorderTasks,
 } from '@/lib/api';
 import CalendarSidebar from '@/components/CalendarSidebar';
 import UndoToast, { useUndo } from '@/components/UndoToast';
@@ -46,7 +46,7 @@ interface AgentItem {
   status?: string;
 }
 
-function calcScore(task: PomoTask): number {
+function calcScore(task: Task): number {
   const now = new Date();
   let urgency = 0;
   if (task.dueDate) {
@@ -77,14 +77,14 @@ function SortableTaskItem(props: { id: string; children: React.ReactNode }) {
   );
 }
 
-export default function PomodoroPage() {
-  const [projects, setProjects] = useState<PomoProject[]>([]);
-  const [subprojects, setSubprojects] = useState<PomoSubproject[]>([]);
-  const [tasks, setTasks] = useState<PomoTask[]>([]);
-  const [goals, setGoals] = useState<PomoGoal[]>([]);
+export default function TasksPage() {
+  const [projects, setProjects] = useState<TaskProject[]>([]);
+  const [subprojects, setSubprojects] = useState<TaskSubproject[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [goals, setGoals] = useState<TaskGoal[]>([]);
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
-  const [detailGoal, setDetailGoal] = useState<PomoGoal | null>(null);
+  const [detailGoal, setDetailGoal] = useState<TaskGoal | null>(null);
   const [agents, setAgents] = useState<AgentItem[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedSubprojectId, setSelectedSubprojectId] = useState<string | null>(null);
@@ -113,8 +113,8 @@ export default function PomodoroPage() {
 
   const load = useCallback(async () => {
     const [p, sp, t, g, agentResult] = await Promise.all([
-      getPomoProjects(), getPomoSubprojects(), getPomoTasks(),
-      getPomoGoals({ status: 'active' }),
+      getTaskProjects(), getTaskSubprojects(), getTasks(),
+      getTaskGoals({ status: 'active' }),
       fetch('http://localhost:3300/api/agents').then(r => r.json()).catch(() => ({ agents: [] })),
     ]);
     setProjects(p);
@@ -256,10 +256,9 @@ export default function PomodoroPage() {
     e.preventDefault();
     if (!newTaskTitle.trim() || creating) return;
 
-    const input: Parameters<typeof createPomoTask>[0] = {
+    const input: Parameters<typeof createTask>[0] = {
       title: newTaskTitle.trim(),
       priority: newTaskPriority,
-      estimatedPomodoros: 0,
     };
 
     if (newTaskDueDate) input.dueDate = newTaskDueDate;
@@ -276,13 +275,9 @@ export default function PomodoroPage() {
 
     setCreating(true);
     try {
-      await createPomoTask(input);
+      await createTask(input);
       setNewTaskTitle('');
       setNewTaskDueDate('');
-      setNewTaskCategory('');
-      setNewTaskGoalId('');
-      setNewTaskAssignee('me');
-      setNewTaskAgentId('');
       // Quick Add stays open — refocus for continuous entry
       quickAddInputRef.current?.focus();
       await load();
@@ -294,19 +289,19 @@ export default function PomodoroPage() {
     }
   };
 
-  const handleToggleComplete = async (task: PomoTask) => {
+  const handleToggleComplete = async (task: Task) => {
     const prevStatus = task.status;
     const prevCompletedAt = task.completedAt;
     if (task.status === 'completed') {
-      await updatePomoTask(task.id, { status: 'pending', completedAt: null });
+      await updateTask(task.id, { status: 'pending', completedAt: null });
     } else {
-      await updatePomoTask(task.id, { status: 'completed', completedAt: new Date().toISOString() });
+      await updateTask(task.id, { status: 'completed', completedAt: new Date().toISOString() });
     }
     load();
     undo.push({
       message: task.status === 'completed' ? '"' + task.title + '" 미완료로 변경됨' : '"' + task.title + '" 완료 처리됨',
       onUndo: async () => {
-        await updatePomoTask(task.id, { status: prevStatus, completedAt: prevCompletedAt ?? null });
+        await updateTask(task.id, { status: prevStatus, completedAt: prevCompletedAt ?? null });
         load();
       },
     });
@@ -315,17 +310,16 @@ export default function PomodoroPage() {
   const handleDeleteTask = async (id: string) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
-    await deletePomoTask(id);
+    await deleteTask(id);
     load();
     undo.push({
       message: '"' + task.title + '" 삭제됨',
       onUndo: async () => {
-        await createPomoTask({
+        await createTask({
           title: task.title,
           description: task.description,
           priority: task.priority,
           category: task.category,
-          estimatedPomodoros: task.estimatedPomodoros,
           dueDate: task.dueDate,
           goalId: task.goalId,
           assigneeType: task.assigneeType,
@@ -338,8 +332,8 @@ export default function PomodoroPage() {
     });
   };
 
-  const handleUpdateTask = async (id: string, updates: Parameters<typeof updatePomoTask>[1]) => {
-    await updatePomoTask(id, updates);
+  const handleUpdateTask = async (id: string, updates: Parameters<typeof updateTask>[1]) => {
+    await updateTask(id, updates);
     load();
   };
 
@@ -357,7 +351,7 @@ export default function PomodoroPage() {
       const map = new Map(updates.map(u => [u.id, u.sortOrder]));
       return prev.map(t => map.has(t.id) ? { ...t, sortOrder: map.get(t.id)! } : t);
     });
-    await reorderPomoTasks(updates);
+    await reorderTasks(updates);
   };
 
   const handleAddEpisode = async (goalId: string) => {
@@ -365,8 +359,8 @@ export default function PomodoroPage() {
     if (!goal) return;
     const newCount = goal.episodeCount + 1;
     await Promise.all([
-      createPomoEpisode(goalId, newCount),
-      updatePomoGoal(goalId, { episodeCount: newCount, lastEpisodeAt: new Date().toISOString() }),
+      createTaskEpisode(goalId, newCount),
+      updateTaskGoal(goalId, { episodeCount: newCount, lastEpisodeAt: new Date().toISOString() }),
     ]);
     load();
   };
@@ -381,18 +375,18 @@ export default function PomodoroPage() {
   };
 
   const handleCreateGoal = async (input: CreateGoalInput) => {
-    await createPomoGoal(input);
+    await createTaskGoal(input);
     load();
   };
 
-  const handleUpdateGoal = async (id: string, updates: Parameters<typeof updatePomoGoal>[1]) => {
-    await updatePomoGoal(id, updates);
+  const handleUpdateGoal = async (id: string, updates: Parameters<typeof updateTaskGoal>[1]) => {
+    await updateTaskGoal(id, updates);
     load();
   };
 
   const handleDeleteGoal = async (id: string) => {
     const goal = goals.find(g => g.id === id);
-    await deletePomoGoal(id);
+    await deleteTaskGoal(id);
     setDetailGoal(null);
     if (selectedGoalId === id) setSelectedGoalId(null);
     load();
@@ -400,7 +394,7 @@ export default function PomodoroPage() {
       undo.push({
         message: '"' + goal.title + '" 목표 삭제됨',
         onUndo: async () => {
-          await createPomoGoal({
+          await createTaskGoal({
             title: goal.title,
             description: goal.description,
             priority: goal.priority,
@@ -417,20 +411,20 @@ export default function PomodoroPage() {
   };
 
   const handleCreateProject = async (name: string, color: string) => {
-    await createPomoProject(name, color);
+    await createTaskProject(name, color);
     load();
   };
 
   const handleDeleteProject = async (id: string) => {
     const project = projects.find(p => p.id === id);
-    await deletePomoProject(id);
+    await deleteTaskProject(id);
     if (selectedProjectId === id) setSelectedProjectId(null);
     load();
     if (project) {
       undo.push({
         message: '"' + project.name + '" 프로젝트 삭제됨',
         onUndo: async () => {
-          await createPomoProject(project.name, project.color);
+          await createTaskProject(project.name, project.color);
           load();
         },
       });
@@ -438,7 +432,7 @@ export default function PomodoroPage() {
   };
 
   const handleUpdateProject = async (id: string, updates: Partial<{ name: string; color: string }>) => {
-    await updatePomoProject(id, updates);
+    await updateTaskProject(id, updates);
     load();
   };
 

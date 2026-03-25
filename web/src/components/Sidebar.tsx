@@ -52,8 +52,8 @@ const WORKSPACE_SECTIONS: NavSection[] = [
   {
     label: '도구',
     items: [
-      { href: '/pomodoro', label: '할 일', icon: <Timer size={18} /> },
-      { href: '/pomodoro/weekly', label: '주간 리뷰', icon: <CalendarDays size={18} /> },
+      { href: '/tasks', label: '할 일', icon: <Timer size={18} /> },
+      { href: '/tasks/weekly', label: '주간 리뷰', icon: <CalendarDays size={18} /> },
       { href: '/notes', label: '노트', icon: <FileText size={18} /> },
     ],
   },
@@ -87,7 +87,7 @@ export default function Sidebar() {
     if (otherMode === 'monitor') {
       router.push('/');
     } else {
-      router.push('/pomodoro');
+      router.push('/tasks');
     }
   };
 
@@ -100,7 +100,7 @@ export default function Sidebar() {
         {/* Logo + Toggle */}
         <div className={`flex items-center ${collapsed ? 'justify-center px-2' : 'justify-between px-6'} py-6`}>
           {!collapsed && (
-            <Link href={mode === 'monitor' ? '/' : '/pomodoro'} className="flex items-center gap-2.5">
+            <Link href={mode === 'monitor' ? '/' : '/tasks'} className="flex items-center gap-2.5">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0 bg-gradient-to-br ${currentConfig.color}`}>
                 N
               </div>

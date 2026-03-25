@@ -339,7 +339,7 @@ export default function SidePanel({
       {/* Header */}
       <div className="flex items-center gap-2 px-4 pt-4 pb-2 shrink-0">
         <button
-          onClick={() => router.push('/pomodoro')}
+          onClick={() => router.push('/tasks')}
           className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground/50 hover:text-foreground hover:bg-accent transition-colors"
           title="워크스페이스로 돌아가기"
           aria-label="워크스페이스로 돌아가기"

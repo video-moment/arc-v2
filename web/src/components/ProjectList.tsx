@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import type { PomoProject, PomoSubproject, PomoTask, PomoGoal } from '@/lib/api';
+import type { TaskProject, TaskSubproject, Task, TaskGoal } from '@/lib/api';
 import { FolderIcon, SubfolderIcon, ChevronIcon, PlusIcon, XIcon, TomatoIcon, InboxIcon, GoalIcon } from './Icons';
 
 interface Props {
-  projects: PomoProject[];
-  subprojects: PomoSubproject[];
-  tasks: PomoTask[];
-  goals?: PomoGoal[];
+  projects: TaskProject[];
+  subprojects: TaskSubproject[];
+  tasks: Task[];
+  goals?: TaskGoal[];
   selectedGoalId?: string | null;
   onSelectGoal?: (id: string | null) => void;
   selectedProjectId: string | null;
@@ -69,16 +69,16 @@ export default function ProjectList({
   };
 
   const goalStats = useMemo(() => {
-    const map = new Map<string, { totalEst: number; totalComp: number }>();
+    const map = new Map<string, { total: number; completed: number }>();
     for (const goal of goals) {
-      map.set(goal.id, { totalEst: 0, totalComp: 0 });
+      map.set(goal.id, { total: 0, completed: 0 });
     }
     for (const task of tasks) {
       if (!task.goalId) continue;
       const stat = map.get(task.goalId);
       if (!stat) continue;
-      stat.totalEst += task.estimatedPomodoros;
-      stat.totalComp += task.completedPomodoros;
+      stat.total++;
+      if (task.status === 'completed') stat.completed++;
     }
     return map;
   }, [goals, tasks]);
@@ -151,8 +151,8 @@ export default function ProjectList({
           </div>
           <div className="space-y-0.5">
             {goals.map(goal => {
-              const stat = goalStats.get(goal.id) ?? { totalEst: 0, totalComp: 0 };
-              const progress = stat.totalEst > 0 ? Math.min(Math.round((stat.totalComp / stat.totalEst) * 100), 100) : 0;
+              const stat = goalStats.get(goal.id) ?? { total: 0, completed: 0 };
+              const progress = stat.total > 0 ? Math.min(Math.round((stat.completed / stat.total) * 100), 100) : 0;
               const isGoalSelected = selectedGoalId === goal.id;
               return (
                 <button

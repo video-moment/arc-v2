@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { PomoGoal, PomoTask, PomoMilestone, PomoEpisode } from '@/lib/api';
+import type { TaskGoal, Task, TaskMilestone, TaskEpisode } from '@/lib/api';
 import {
-  getPomoMilestones,
-  createPomoMilestone,
-  updatePomoMilestone,
-  deletePomoMilestone,
-  getPomoEpisodes,
-  deletePomoEpisode,
+  getTaskMilestones,
+  createTaskMilestone,
+  updateTaskMilestone,
+  deleteTaskMilestone,
+  getTaskEpisodes,
+  deleteTaskEpisode,
 } from '@/lib/api';
 import type { GoalUpdates } from '@/components/GoalStrip';
 
@@ -47,8 +47,8 @@ const TASK_STATUS_LABEL: Record<string, string> = {
 
 
 interface Props {
-  goal: PomoGoal | null;
-  tasks: PomoTask[];
+  goal: TaskGoal | null;
+  tasks: Task[];
   agents: AgentItem[];
   onClose: () => void;
   onUpdateGoal: (id: string, updates: GoalUpdates) => void;
@@ -417,14 +417,14 @@ function EditableDate({ value, onSave }: { value?: string; onSave: (v: string | 
 
 // ── Milestone section component ──
 function MilestoneSection({ goalId }: { goalId: string }) {
-  const [milestones, setMilestones] = useState<PomoMilestone[]>([]);
+  const [milestones, setMilestones] = useState<TaskMilestone[]>([]);
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
-      const data = await getPomoMilestones(goalId);
+      const data = await getTaskMilestones(goalId);
       setMilestones(data);
     } catch {
       // silently ignore if table doesn't exist yet
@@ -433,9 +433,9 @@ function MilestoneSection({ goalId }: { goalId: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleToggle = async (m: PomoMilestone) => {
+  const handleToggle = async (m: TaskMilestone) => {
     try {
-      await updatePomoMilestone(m.id, {
+      await updateTaskMilestone(m.id, {
         isCompleted: !m.isCompleted,
         completedAt: m.isCompleted ? null : new Date().toISOString(),
       });
@@ -445,7 +445,7 @@ function MilestoneSection({ goalId }: { goalId: string }) {
 
   const handleDelete = async (id: string) => {
     try {
-      await deletePomoMilestone(id);
+      await deleteTaskMilestone(id);
       load();
     } catch { /* ignore */ }
   };
@@ -454,7 +454,7 @@ function MilestoneSection({ goalId }: { goalId: string }) {
     const title = newTitle.trim();
     if (!title) { setAdding(false); return; }
     try {
-      await createPomoMilestone(goalId, title);
+      await createTaskMilestone(goalId, title);
       setNewTitle('');
       setAdding(false);
       load();
@@ -619,11 +619,11 @@ function MilestoneSection({ goalId }: { goalId: string }) {
 
 // ── Episode history section (series goals) ──
 function EpisodeSection({ goalId }: { goalId: string }) {
-  const [episodes, setEpisodes] = useState<PomoEpisode[]>([]);
+  const [episodes, setEpisodes] = useState<TaskEpisode[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const data = await getPomoEpisodes(goalId);
+      const data = await getTaskEpisodes(goalId);
       setEpisodes(data);
     } catch { /* silently ignore */ }
   }, [goalId]);
@@ -632,7 +632,7 @@ function EpisodeSection({ goalId }: { goalId: string }) {
 
   const handleDelete = async (id: string) => {
     try {
-      await deletePomoEpisode(id);
+      await deleteTaskEpisode(id);
       load();
     } catch { /* ignore */ }
   };

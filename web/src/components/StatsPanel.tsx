@@ -1,10 +1,10 @@
 'use client';
 
-import type { PomoTask, PomoGoal } from '@/lib/api';
+import type { Task, TaskGoal } from '@/lib/api';
 
 interface Props {
-  tasks: PomoTask[];
-  goals: PomoGoal[];
+  tasks: Task[];
+  goals: TaskGoal[];
 }
 
 export default function StatsPanel({ tasks, goals }: Props) {

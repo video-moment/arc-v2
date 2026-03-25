@@ -1,21 +1,21 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import type { PomoTask, PomoGoal } from '@/lib/api';
+import type { Task, TaskGoal } from '@/lib/api';
 import { CheckIcon, XIcon, CalendarIcon, BotIcon } from './Icons';
 import CustomSelect from '@/components/CustomSelect';
 import CustomDatePicker from '@/components/CustomDatePicker';
 
 interface Props {
-  task: PomoTask;
-  onToggleComplete: (task: PomoTask) => void;
+  task: Task;
+  onToggleComplete: (task: Task) => void;
   onDelete: (id: string) => void;
   onUpdate?: (id: string, updates: Record<string, any>) => void;
-  goals?: PomoGoal[];
+  goals?: TaskGoal[];
   agents?: { id: string; name: string }[];
 }
 
-const AGENT_STATUS_CYCLE: Array<PomoTask['status']> = ['pending', 'in_progress', 'completed'];
+const AGENT_STATUS_CYCLE: Array<Task['status']> = ['pending', 'in_progress', 'completed'];
 
 function formatDueDate(dueDate: string): { text: string; urgent: boolean; overdue: boolean } {
   const now = new Date();
@@ -53,8 +53,8 @@ function TaskEditModal({
   onSave,
   onClose,
 }: {
-  task: PomoTask;
-  goals?: PomoGoal[];
+  task: Task;
+  goals?: TaskGoal[];
   agents?: { id: string; name: string }[];
   onSave: (id: string, updates: Record<string, any>) => void;
   onClose: () => void;

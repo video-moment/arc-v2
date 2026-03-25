@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { type PomoTask, type PomoGoal, type PomoProject } from '@/lib/api';
+import { type Task, type TaskGoal, type TaskProject } from '@/lib/api';
 
 const PROJECT_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981', '#3b82f6', '#06b6d4'];
 
 interface Props {
-  tasks: PomoTask[];
-  goals: PomoGoal[];
-  projects?: PomoProject[];
+  tasks: Task[];
+  goals: TaskGoal[];
+  projects?: TaskProject[];
   selectedProjectId?: string | null;
   onSelectProject?: (id: string | null) => void;
   onCreateProject?: (name: string, color: string) => void;
@@ -39,8 +39,8 @@ export default function CalendarSidebar({ tasks, goals, projects = [], selectedP
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
   const { tasksByDate, goalsByDate } = useMemo(() => {
-    const tbd: Record<string, PomoTask[]> = {};
-    const gbd: Record<string, PomoGoal[]> = {};
+    const tbd: Record<string, Task[]> = {};
+    const gbd: Record<string, TaskGoal[]> = {};
     for (const task of tasks) {
       if (!task.dueDate) continue;
       const key = task.dueDate.slice(0, 10);

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 
 export type AppMode = 'workspace' | 'monitor';
 
-const WORKSPACE_PATHS = ['/pomodoro', '/notes'];
+const WORKSPACE_PATHS = ['/tasks', '/notes'];
 
 function detectMode(pathname: string): AppMode {
   return WORKSPACE_PATHS.some(p => pathname.startsWith(p)) ? 'workspace' : 'monitor';
