@@ -52,7 +52,7 @@ const WORKSPACE_SECTIONS: NavSection[] = [
   {
     label: '도구',
     items: [
-      { href: '/tasks', label: '할 일', icon: <Timer size={18} /> },
+      { href: '/tasks', label: '목표', icon: <Timer size={18} /> },
       { href: '/tasks/weekly', label: '주간 리뷰', icon: <CalendarDays size={18} /> },
       { href: '/notes', label: '노트', icon: <FileText size={18} /> },
     ],

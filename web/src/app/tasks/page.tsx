@@ -584,17 +584,21 @@ export default function TasksPage() {
             />
           </div>
 
-          {/* Block 2: 할일 섹션 */}
+          {/* Block 2: 오늘의 할 일 */}
           <div
-            className="rounded-xl"
+            className="mb-6 rounded-xl"
             style={{
               background: 'var(--bg-elevated)',
               padding: '24px 28px',
               boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03)',
             }}
           >
+            <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-secondary)' }}>
+              오늘의 할 일
+            </h3>
+
             {/* Quick add form */}
-            <form onSubmit={handleCreateTask} className="mb-6">
+            <form onSubmit={handleCreateTask} className="mb-5">
               <div
                 className="rounded-lg overflow-hidden transition-all"
                 style={{
@@ -613,16 +617,6 @@ export default function TasksPage() {
                     className="flex-1 bg-transparent outline-none"
                     style={{ color: 'var(--text-primary)', fontSize: '14px' }}
                   />
-                  {/* Auto-linked goal indicator */}
-                  {newTaskGoalId && !quickAddExpanded && (() => {
-                    const g = goals.find(gl => gl.id === newTaskGoalId);
-                    return g ? (
-                      <span className="flex items-center gap-1 flex-shrink-0" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: g.color || '#6366f1' }} />
-                        {g.title}
-                      </span>
-                    ) : null;
-                  })()}
                   {newTaskTitle.trim() && (
                     <button
                       type="submit"
@@ -639,18 +633,8 @@ export default function TasksPage() {
                     className="flex items-center gap-2 px-1 py-2 flex-wrap"
                     style={{ borderTop: '1px solid var(--border-subtle)' }}
                   >
-                    <CustomSelect
-                      size="sm"
-                      value={newTaskPriority}
-                      options={priorityOptions}
-                      onChange={setNewTaskPriority}
-                    />
-                    <CustomDatePicker
-                      size="sm"
-                      value={newTaskDueDate}
-                      onChange={setNewTaskDueDate}
-                      placeholder="날짜"
-                    />
+                    <CustomSelect size="sm" value={newTaskPriority} options={priorityOptions} onChange={setNewTaskPriority} />
+                    <CustomDatePicker size="sm" value={newTaskDueDate} onChange={setNewTaskDueDate} placeholder="날짜" />
                     <input
                       value={newTaskCategory}
                       onChange={e => setNewTaskCategory(e.target.value)}
@@ -659,221 +643,191 @@ export default function TasksPage() {
                       style={{ background: 'var(--bg-input)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
                     />
                     {goals.length > 0 && (
-                      <CustomSelect
-                        size="sm"
-                        value={newTaskGoalId}
-                        options={goalOptions}
-                        onChange={setNewTaskGoalId}
-                        placeholder="목표"
-                      />
+                      <CustomSelect size="sm" value={newTaskGoalId} options={goalOptions} onChange={setNewTaskGoalId} placeholder="목표" />
                     )}
                     <CustomSelect
                       size="sm"
                       value={newTaskAssignee === 'agent' ? newTaskAgentId : 'me'}
                       options={assigneeOptions}
                       onChange={val => {
-                        if (val === 'me') {
-                          setNewTaskAssignee('me');
-                          setNewTaskAgentId('');
-                        } else {
-                          setNewTaskAssignee('agent');
-                          setNewTaskAgentId(val);
-                        }
+                        if (val === 'me') { setNewTaskAssignee('me'); setNewTaskAgentId(''); }
+                        else { setNewTaskAssignee('agent'); setNewTaskAgentId(val); }
                       }}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setQuickAddExpanded(false)}
-                      className="ml-auto text-xs"
-                      style={{ color: 'var(--text-tertiary)' }}
-                    >
-                      접기
-                    </button>
+                    <button type="button" onClick={() => setQuickAddExpanded(false)} className="ml-auto text-xs" style={{ color: 'var(--text-tertiary)' }}>접기</button>
                   </div>
                 )}
               </div>
             </form>
 
-            {/* Task list header with inline filter toggle */}
-            <div className="flex items-center gap-2 mb-4">
-              <h3
-                className="text-sm font-semibold flex-1"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                {showInbox ? '인박스' : '할 일'} <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>({pendingTasks.length})</span>
-              </h3>
+            {(() => {
+              const todayStr = new Date().toISOString().split('T')[0];
+              const allPending = tasks.filter(t => t.status !== 'completed');
+              const overdue = allPending.filter(t => t.dueDate && t.dueDate.slice(0, 10) < todayStr);
+              const todayDue = allPending.filter(t => t.dueDate?.startsWith(todayStr));
+              const inProgress = allPending.filter(t => t.status === 'in_progress' && !t.dueDate?.startsWith(todayStr) && !(t.dueDate && t.dueDate.slice(0, 10) < todayStr));
+              const unassigned = allPending.filter(t => !t.goalId && !t.dueDate);
+              const completedToday = tasks.filter(t => t.status === 'completed' && t.completedAt?.startsWith(todayStr));
+              const sections = [
+                { key: 'overdue', label: '기한 초과', tasks: overdue, color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+                { key: 'today', label: '오늘 마감', tasks: todayDue, color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+                { key: 'progress', label: '진행 중', tasks: inProgress, color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
+                { key: 'unassigned', label: '미분류', tasks: unassigned, color: 'var(--text-tertiary)', bg: 'var(--bg-secondary)', border: 'var(--border-subtle)' },
+              ].filter(s => s.tasks.length > 0);
 
-              {/* Filter toggle icon */}
-              {tasks.length > 0 && (
-                <button
-                  onClick={() => setShowFilters(f => !f)}
-                  className="p-1.5 rounded-md transition-all relative"
-                  style={{
-                    background: showFilters ? 'var(--accent-soft)' : 'transparent',
-                    color: showFilters ? 'var(--accent)' : 'var(--text-tertiary)',
-                  }}
-                  title="필터"
-                >
-                  <FunnelIcon size={13} />
-                  {activeFilterCount > 0 && (
-                    <span
-                      className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] flex items-center justify-center font-medium"
-                      style={{ background: 'var(--btn-primary)', color: 'var(--btn-primary-text)' }}
-                    >
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </button>
-              )}
-            </div>
+              if (sections.length === 0 && completedToday.length === 0) {
+                return (
+                  <div className="py-8 text-center">
+                    <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>오늘 예정된 할 일이 없습니다</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
+                      목표에서 할 일을 추가하거나 위에서 빠르게 추가해보세요
+                    </p>
+                  </div>
+                );
+              }
 
-            {/* Filter/Sort/Search panel — collapsible */}
-            {showFilters && tasks.length > 0 && (
-              <div className="mb-4 space-y-2">
-                {/* Filter chips */}
-                <div className="flex gap-1 flex-wrap">
-                  {FILTERS.map(f => (
-                    <button
-                      key={f.key}
-                      onClick={() => setFilterType(f.key)}
-                      className="px-2.5 py-1 rounded-full text-[11px] font-medium transition-all"
-                      style={{
-                        background: filterType === f.key ? 'var(--accent-soft)' : 'transparent',
-                        color: filterType === f.key ? 'var(--accent)' : 'var(--text-tertiary)',
-                        border: filterType === f.key ? '1px solid var(--accent)' : '1px solid var(--border-subtle)',
-                      }}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Sort + Search row */}
-                <div className="flex items-center gap-2">
-                  <CustomSelect
-                    size="sm"
-                    value={sortType}
-                    options={sortOptions}
-                    onChange={val => setSortType(val as SortType)}
-                  />
-
-                  <input
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="검색..."
-                    className="flex-1 bg-transparent text-[11px] outline-none px-2 py-1 rounded-md"
-                    style={{
-                      color: 'var(--text-primary)',
-                      border: '1px solid var(--border-subtle)',
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Pending tasks */}
-            <DndContext
-              sensors={dndSensors}
-              collisionDetection={closestCenter}
-              onDragEnd={(event: DragEndEvent) => {
-                const { active, over } = event;
-                if (over && active.id !== over.id) handleReorderTasks(active.id as string, over.id as string);
-              }}
-            >
-            <SortableContext items={pendingTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-2">
-              {pendingTasks.map(t => (
-                <SortableTaskItem key={t.id} id={t.id}>
-                  <div className="flex items-start">
-                    {recommendedIds.has(t.id) && !selectedGoalId && !showInbox && !searchQuery && filterType === 'all' && (
-                      <span
-                        className="flex-shrink-0 mt-3 mr-1.5 text-xs leading-none"
-                        style={{ color: 'var(--yellow)', opacity: 0.7 }}
-                        title="오늘의 추천"
-                      >
-                        ★
-                      </span>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <TaskItem
-                        task={t}
-                        onToggleComplete={handleToggleComplete}
-                        onDelete={handleDeleteTask}
-                        onUpdate={handleUpdateTask}
-                        goals={goals}
-                        agents={agents}
-                      />
+              return (
+                <div className="space-y-4">
+                  {sections.map(section => (
+                    <div key={section.key}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: section.color }} />
+                        <span className="text-xs font-semibold" style={{ color: section.color }}>{section.label}</span>
+                        <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{section.tasks.length}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {section.tasks.map(t => (
+                          <TaskItem
+                            key={t.id}
+                            task={t}
+                            onToggleComplete={handleToggleComplete}
+                            onDelete={handleDeleteTask}
+                            onUpdate={handleUpdateTask}
+                            goals={goals}
+                            agents={agents}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </SortableTaskItem>
-              ))}
-              {pendingTasks.length === 0 && (
-                <div className="py-12 text-center">
-                  {searchQuery ? (
-                    <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>검색 결과가 없습니다</p>
-                  ) : (
-                    <>
-                      <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>할 일이 없습니다</p>
-                      <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>
-                        위에서 할 일을 추가하거나<br />목표를 만들어 시작해보세요
-                      </p>
-                    </>
+                  ))}
+                  {completedToday.length > 0 && (
+                    <div>
+                      <button
+                        className="flex items-center gap-1.5 mb-2 transition-colors"
+                        onClick={() => setCompletedExpanded(e => !e)}
+                      >
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#16a34a' }} />
+                        <span className="text-xs font-semibold" style={{ color: '#16a34a' }}>오늘 완료</span>
+                        <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{completedToday.length}</span>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                          style={{ color: 'var(--text-tertiary)', transform: completedExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </button>
+                      {completedExpanded && (
+                        <div className="space-y-1">
+                          {completedToday.map(t => (
+                            <TaskItem key={t.id} task={t} onToggleComplete={handleToggleComplete} onDelete={handleDeleteTask} onUpdate={handleUpdateTask} goals={goals} agents={agents} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
-            </div>
-            </SortableContext>
-            </DndContext>
-
-            {/* Completed tasks — collapsible */}
-            {completedTasks.length > 0 && (
-              <div className="mt-8 pb-2">
-                <button
-                  className="flex items-center gap-1.5 mb-3 transition-colors"
-                  onClick={() => setCompletedExpanded(e => !e)}
-                >
-                  <span
-                    className="text-sm font-semibold"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
-                    완료됨 <span style={{ fontWeight: 400 }}>({completedTasks.length})</span>
-                  </span>
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    style={{
-                      color: 'var(--text-tertiary)',
-                      transform: completedExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                      transition: 'transform 0.2s ease',
-                    }}
-                  >
-                    <polyline points="6 9 12 15 18 9"/>
-                  </svg>
-                </button>
-                {completedExpanded && (
-                  <div className="space-y-2">
-                    {completedTasks.map(t => (
-                      <TaskItem
-                        key={t.id}
-                        task={t}
-                        onToggleComplete={handleToggleComplete}
-                        onDelete={handleDeleteTask}
-                        onUpdate={handleUpdateTask}
-                        goals={goals}
-                        agents={agents}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+              );
+            })()}
           </div>{/* end Block 2 */}
+
+          {/* Block 3: 이번 주 일정 */}
+          <div
+            className="rounded-xl"
+            style={{
+              background: 'var(--bg-elevated)',
+              padding: '24px 28px',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03)',
+            }}
+          >
+            <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--text-secondary)' }}>
+              이번 주 일정
+            </h3>
+            {(() => {
+              const now = new Date();
+              const day = now.getDay();
+              const mon = new Date(now);
+              mon.setDate(now.getDate() - ((day === 0 ? 7 : day) - 1));
+              mon.setHours(0, 0, 0, 0);
+
+              const days = Array.from({ length: 7 }, (_, i) => {
+                const d = new Date(mon);
+                d.setDate(mon.getDate() + i);
+                return d;
+              });
+
+              const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
+              const todayStr = now.toISOString().split('T')[0];
+              const allPending = tasks.filter(t => t.status !== 'completed');
+
+              return (
+                <div className="space-y-1">
+                  {days.map((d, i) => {
+                    const dateStr = d.toISOString().split('T')[0];
+                    const isToday = dateStr === todayStr;
+                    const isPast = dateStr < todayStr;
+                    const dayTasks = allPending.filter(t => t.dueDate?.startsWith(dateStr));
+                    const completedDay = tasks.filter(t => t.status === 'completed' && t.completedAt?.startsWith(dateStr));
+
+                    return (
+                      <div
+                        key={dateStr}
+                        className="flex gap-3 py-2.5 rounded-lg px-3 transition-colors"
+                        style={{
+                          background: isToday ? 'var(--accent-soft)' : 'transparent',
+                          opacity: isPast && !isToday ? 0.5 : 1,
+                        }}
+                      >
+                        <div className="flex-shrink-0 w-14 text-right">
+                          <span className="text-xs font-semibold" style={{ color: isToday ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                            {DAY_LABELS[i]}
+                          </span>
+                          <span className="text-[10px] ml-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {d.getMonth() + 1}/{d.getDate()}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {dayTasks.length === 0 && completedDay.length === 0 ? (
+                            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>—</span>
+                          ) : (
+                            <div className="space-y-0.5">
+                              {dayTasks.map(t => {
+                                const goal = t.goalId ? goals.find(g => g.id === t.goalId) : null;
+                                return (
+                                  <div key={t.id} className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{
+                                      background: t.priority === 'high' ? '#dc2626' : t.priority === 'medium' ? '#d97706' : '#3b82f6',
+                                    }} />
+                                    <span className="text-xs truncate" style={{ color: 'var(--text-primary)' }}>{t.title}</span>
+                                    {goal && (
+                                      <span className="text-[10px] flex-shrink-0" style={{ color: goal.color || 'var(--text-tertiary)' }}>{goal.title}</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                              {completedDay.map(t => (
+                                <div key={t.id} className="flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#16a34a' }} />
+                                  <span className="text-xs truncate line-through" style={{ color: 'var(--text-tertiary)' }}>{t.title}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>{/* end Block 3 */}
 
         </div>
       </div>

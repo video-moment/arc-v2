@@ -66,13 +66,13 @@ function GoalRow({ goal }: { goal: TaskGoal }) {
   const dotColor = colorMap[goal.color] || 'bg-primary';
 
   return (
-    <div className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-accent/50 transition-colors">
+    <Link href={`/tasks/goals/${goal.id}`} className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-accent/50 transition-colors">
       <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
       <span className="text-sm flex-1 truncate">{goal.title}</span>
       <span className="text-[10px] text-muted-foreground shrink-0">
         {goal.goalType === 'series' ? `EP ${goal.episodeCount}` : goal.status}
       </span>
-    </div>
+    </Link>
   );
 }
 
@@ -296,7 +296,7 @@ export default function DashboardPage() {
           <p className="text-sm font-semibold mb-3">빠른 이동</p>
           <div className="space-y-1.5">
             {[
-              { href: '/tasks', label: '할 일', icon: <CheckCircle2 size={14} />, desc: '태스크 관리' },
+              { href: '/tasks', label: '목표', icon: <CheckCircle2 size={14} />, desc: '목표 및 태스크 관리' },
               { href: '/tasks/weekly', label: '주간 리뷰', icon: <TrendingUp size={14} />, desc: '주간 통계' },
               { href: '/notes', label: '노트', icon: <FileText size={14} />, desc: '위키 노트' },
               { href: '/camps', label: '캠프', icon: <Layers size={14} />, desc: '환경 관리' },

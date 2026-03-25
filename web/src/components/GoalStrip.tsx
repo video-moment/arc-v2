@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Code2, Video, Settings, Palette, BookOpen, MoreHorizontal, Target } from 'lucide-react';
 import type { TaskGoal, Task, TaskProject } from '@/lib/api';
 import CustomSelect from '@/components/CustomSelect';
@@ -619,6 +620,7 @@ interface Props {
 }
 
 export default function GoalStrip({ goals, tasks, projects, selectedGoalId, selectedProjectId, onSelectGoal, onSelectProject, onCreateGoal, onUpdateGoal, onAddEpisode, onOpenDetail }: Props) {
+  const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [formTitle, setFormTitle] = useState('');
   const [formDesc, setFormDesc] = useState('');
@@ -697,7 +699,7 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
   };
 
   const handleRowClick = (id: string) => {
-    onSelectGoal(selectedGoalId === id ? null : id);
+    router.push('/tasks/goals/' + id);
   };
 
   // 기한 임박 여부 계산
