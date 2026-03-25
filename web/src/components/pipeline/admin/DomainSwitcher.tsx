@@ -90,7 +90,7 @@ export function DomainSwitcher({ currentDomainId }: DomainSwitcherProps) {
               <span
                 className="w-1.5 h-1.5 rounded-full shrink-0"
                 style={{
-                  background: d.id === currentDomainId ? 'var(--accent)' : 'var(--text-tertiary)',
+                  background: d.id === currentDomainId ? 'var(--color-accent)' : 'var(--text-tertiary)',
                   opacity: d.id === currentDomainId ? 1 : 0.4,
                 }}
               />

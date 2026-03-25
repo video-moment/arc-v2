@@ -117,7 +117,7 @@ function SectionCard({
               <button
                 onClick={handleShowHistory}
                 className="text-[11px] cursor-pointer transition-colors hover:brightness-125"
-                style={{ color: 'var(--accent)' }}
+                style={{ color: 'var(--color-accent)' }}
               >
                 {showHistory ? '히스토리 닫기' : `이전 버전 보기 (${section.version - 1}개)`}
               </button>
@@ -128,7 +128,7 @@ function SectionCard({
                     <div className="flex items-center gap-2 py-2">
                       <div
                         className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin"
-                        style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}
+                        style={{ borderColor: 'var(--color-accent)', borderTopColor: 'transparent' }}
                       />
                       <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
                         불러오는 중...
@@ -199,7 +199,7 @@ export default function AgentProfileView({ agentId }: AgentProfileViewProps) {
       <div className="flex items-center gap-3 py-20 justify-center">
         <div
           className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
-          style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}
+          style={{ borderColor: 'var(--color-accent)', borderTopColor: 'transparent' }}
         />
         <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
           프로필 불러오는 중...
@@ -245,7 +245,7 @@ export default function AgentProfileView({ agentId }: AgentProfileViewProps) {
           <div className="space-y-1.5">
             {recentChanges.map((s) => (
               <div key={s.id + '-change'} className="flex items-center gap-2 text-[11px]">
-                <span style={{ color: 'var(--accent)' }}>v{s.version}</span>
+                <span style={{ color: 'var(--color-accent)' }}>v{s.version}</span>
                 <span style={{ color: 'var(--text-secondary)' }}>
                   {s.title || s.sectionKey} 업데이트
                 </span>

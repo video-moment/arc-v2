@@ -42,7 +42,7 @@ const sessionStatusLabels: Record<string, string> = {
 
 const sessionStatusColors: Record<string, string> = {
   idle: 'var(--text-tertiary)',
-  running: 'var(--accent)',
+  running: 'var(--color-accent)',
   paused: 'var(--yellow)',
   completed: 'var(--green)',
   error: 'var(--red)',

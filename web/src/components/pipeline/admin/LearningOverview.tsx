@@ -14,7 +14,7 @@ import {
 const TIER_STYLE: Record<string, { color: string; soft: string }> = {
   candidate: { color: 'var(--text-tertiary)', soft: 'var(--bg-hover)' },
   warn: { color: 'var(--yellow)', soft: 'var(--yellow-soft)' },
-  semi_ban: { color: 'var(--accent)', soft: 'var(--accent-soft)' },
+  semi_ban: { color: 'var(--color-accent)', soft: 'var(--accent-soft)' },
   confirmed: { color: 'var(--green)', soft: 'var(--green-soft)' },
 };
 
@@ -241,7 +241,7 @@ function MiniCard({ label, value, highlight }: { label: string; value: string | 
     <div
       className="rounded-xl p-3.5 transition-colors"
       style={{
-        border: '1px solid ' + (highlight ? 'var(--accent)' : 'var(--border-subtle)'),
+        border: '1px solid ' + (highlight ? 'var(--color-accent)' : 'var(--border-subtle)'),
         background: highlight ? 'var(--accent-soft)' : 'var(--bg-hover)',
       }}
     >

@@ -40,7 +40,7 @@ export function TeamSelector({ value, onChange }: TeamSelectorProps) {
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 px-3 py-1.5 text-[12px] rounded-lg border transition-colors"
         style={{
-          borderColor: open ? 'var(--accent)' : 'var(--border)',
+          borderColor: open ? 'var(--color-accent)' : 'var(--border)',
           background: 'var(--bg-card)',
           color: selected ? 'var(--text-primary)' : 'var(--text-tertiary)',
         }}
@@ -63,7 +63,7 @@ export function TeamSelector({ value, onChange }: TeamSelectorProps) {
                 className="text-[9px] font-medium px-1.5 py-0.5 rounded-full"
                 style={{
                   background: 'var(--accent-soft)',
-                  color: 'var(--accent)',
+                  color: 'var(--color-accent)',
                 }}
               >
                 {domains.length}
@@ -74,7 +74,7 @@ export function TeamSelector({ value, onChange }: TeamSelectorProps) {
         <svg
           className="w-3.5 h-3.5 shrink-0 transition-transform"
           style={{
-            color: open ? 'var(--accent)' : 'var(--text-tertiary)',
+            color: open ? 'var(--color-accent)' : 'var(--text-tertiary)',
             transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
           }}
           fill="none"
@@ -155,7 +155,7 @@ export function TeamSelector({ value, onChange }: TeamSelectorProps) {
                   {isSelected && (
                     <svg
                       className="w-3.5 h-3.5 shrink-0"
-                      style={{ color: 'var(--accent)' }}
+                      style={{ color: 'var(--color-accent)' }}
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"

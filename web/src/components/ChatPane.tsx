@@ -166,7 +166,7 @@ export default function ChatPane({ agentId, agents, onChangeAgent, focused, slot
       className="flex flex-col h-full overflow-hidden rounded-xl transition-all duration-150"
       style={{
         background: 'var(--bg-secondary)',
-        border: focused ? '2px solid var(--accent)' : '1px solid var(--border)',
+        border: focused ? '2px solid var(--color-accent)' : '1px solid var(--border)',
         boxShadow: focused ? '0 0 12px rgba(139,92,246,0.2)' : 'none',
       }}
     >
@@ -177,7 +177,7 @@ export default function ChatPane({ agentId, agents, onChangeAgent, focused, slot
           style={{ background: 'var(--accent-soft)' }}
         >
           {slotIndex !== undefined ? (
-            <span className="text-[10px] font-bold" style={{ color: 'var(--accent)' }}>{slotIndex + 1}</span>
+            <span className="text-[10px] font-bold" style={{ color: 'var(--color-accent)' }}>{slotIndex + 1}</span>
           ) : '⚡'}
         </div>
         <div className="flex-1 min-w-0">
@@ -204,7 +204,7 @@ export default function ChatPane({ agentId, agents, onChangeAgent, focused, slot
       <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto px-2 py-2">
         {loading ? (
           <div className="flex items-center gap-2 py-8 justify-center">
-            <div className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+            <div className="w-3 h-3 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--color-accent)', borderTopColor: 'transparent' }} />
             <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>불러오는 중...</span>
           </div>
         ) : messages.length === 0 && !waitingReply ? (

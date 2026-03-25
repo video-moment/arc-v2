@@ -90,6 +90,10 @@ export default function CalendarSidebar({ tasks, goals, projects = [], selectedP
     return goals.filter(g => g.targetDate && g.targetDate.slice(0, 7) === prefix);
   }, [goals, viewYear, viewMonth]);
 
+  const undatedTasks = useMemo(() =>
+    tasks.filter(t => !t.dueDate && t.status !== 'completed'),
+    [tasks]);
+
   const selectedDateLabel = useMemo(() => {
     const d = parseLocalDate(selectedDate);
     const isToday = selectedDate === todayStr;
@@ -108,6 +112,7 @@ export default function CalendarSidebar({ tasks, goals, projects = [], selectedP
   const [editName, setEditName] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
   const newInputRef = useRef<HTMLInputElement>(null);
+  const [undatedExpanded, setUndatedExpanded] = useState(false);
 
   useEffect(() => {
     if (showProjectForm) setTimeout(() => newInputRef.current?.focus(), 30);
@@ -207,7 +212,7 @@ export default function CalendarSidebar({ tasks, goals, projects = [], selectedP
                         fontSize: '13px',
                         background: 'var(--bg-primary)',
                         color: 'var(--text-primary)',
-                        border: '1px solid var(--accent)',
+                        border: '1px solid var(--color-accent)',
                         outline: 'none',
                       }}
                     />
@@ -345,7 +350,7 @@ export default function CalendarSidebar({ tasks, goals, projects = [], selectedP
             <button
               onClick={goToToday}
               className="text-[10px] px-1.5 py-0.5 rounded-md transition-all"
-              style={{ color: 'var(--accent)', background: 'var(--accent-soft)' }}
+              style={{ color: 'var(--color-accent)', background: 'var(--accent-soft)' }}
             >
               오늘
             </button>
@@ -387,7 +392,7 @@ export default function CalendarSidebar({ tasks, goals, projects = [], selectedP
           const isSelected = dateStr === selectedDate && !isToday;
           const hasTasks = !!tasksByDate[dateStr]?.length;
           const hasGoals = !!goalsByDate[dateStr]?.length;
-          const goalColor = hasGoals ? (goalsByDate[dateStr][0].color || 'var(--accent)') : null;
+          const goalColor = hasGoals ? (goalsByDate[dateStr][0].color || 'var(--color-accent)') : null;
           const isSunday = idx % 7 === 0;
           const isSaturday = idx % 7 === 6;
 
@@ -423,7 +428,7 @@ export default function CalendarSidebar({ tasks, goals, projects = [], selectedP
                   color: isToday
                     ? '#fff'
                     : isSelected
-                    ? 'var(--accent)'
+                    ? 'var(--color-accent)'
                     : isSunday
                     ? 'var(--red)'
                     : isSaturday
@@ -514,7 +519,7 @@ export default function CalendarSidebar({ tasks, goals, projects = [], selectedP
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                       >
-                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: goal.color || 'var(--accent)' }} />
+                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: goal.color || 'var(--color-accent)' }} />
                         <span className="text-xs flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
                           {goal.title}
                         </span>
@@ -532,6 +537,88 @@ export default function CalendarSidebar({ tasks, goals, projects = [], selectedP
           </div>
         )}
       </div>
+
+      {/* Undated tasks section */}
+      {undatedTasks.length > 0 && (
+        <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
+          <button
+            onClick={() => setUndatedExpanded(v => !v)}
+            className="w-full flex items-center justify-between"
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)' }}>
+              마감일 미설정
+            </span>
+            <div className="flex items-center gap-1.5">
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  padding: '1px 6px',
+                  borderRadius: '8px',
+                  background: 'var(--bg-tertiary)',
+                  color: 'var(--text-tertiary)',
+                }}
+              >
+                {undatedTasks.length}
+              </span>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{
+                  color: 'var(--text-tertiary)',
+                  transform: undatedExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.15s',
+                }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+          </button>
+
+          {undatedExpanded && (
+            <div className="space-y-1 mt-2">
+              {undatedTasks.slice(0, 10).map(task => {
+                const goal = goals.find(g => g.id === task.goalId);
+                const pColor = task.priority === 'high' ? 'var(--red)' : task.priority === 'medium' ? 'var(--yellow)' : 'var(--text-tertiary)';
+                return (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-2 py-1.5 px-2 rounded-md transition-all"
+                    style={{ background: 'transparent' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: pColor }} />
+                    <span className="text-xs flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
+                      {task.title}
+                    </span>
+                    {goal && (
+                      <span
+                        className="text-[10px] flex-shrink-0"
+                        style={{ color: goal.color || 'var(--color-accent)' }}
+                      >
+                        {goal.title}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+              {undatedTasks.length > 10 && (
+                <p className="text-[11px] px-2 pt-1" style={{ color: 'var(--text-tertiary)' }}>
+                  +{undatedTasks.length - 10}개 더
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

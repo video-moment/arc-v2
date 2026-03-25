@@ -78,7 +78,7 @@ export function UserInput({ onSend, disabled, placeholder }: UserInputProps) {
           disabled={disabled || !value.trim()}
           className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           style={{
-            background: value.trim() && !disabled ? 'var(--accent)' : 'var(--bg-hover)',
+            background: value.trim() && !disabled ? 'var(--color-accent)' : 'var(--bg-hover)',
           }}
         >
           <svg

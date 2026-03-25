@@ -234,7 +234,7 @@ export default function CustomDatePicker({ value, onChange, placeholder = 'ë‚ ì§
             key={d}
             style={{
               textAlign: 'center', fontSize: '11px', fontWeight: 600,
-              color: i === 0 ? 'var(--red, #ef4444)' : i === 6 ? 'var(--accent)' : 'var(--text-tertiary)',
+              color: i === 0 ? 'var(--red, #ef4444)' : i === 6 ? 'var(--color-accent)' : 'var(--text-tertiary)',
               padding: '2px 0',
             }}
           >

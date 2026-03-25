@@ -3,11 +3,11 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   ChevronLeft, ChevronRight, Target, CheckCircle2,
-  Flame, TrendingUp, Calendar,
+  Flame, TrendingUp, Calendar, Circle,
   Code2, Video, Settings, Palette, BookOpen, MoreHorizontal,
 } from 'lucide-react';
 import {
-  getTasks, getTaskGoals, getTaskProjects,
+  getTasks, getTaskGoals, getTaskProjects, updateTask,
   type Task, type TaskGoal, type TaskProject,
 } from '@/lib/api';
 
@@ -121,6 +121,16 @@ export default function WeeklyDashboard() {
       t.dueDate.slice(0, 10) <= weekEnd &&
       t.status !== 'completed'
     ), [tasks, weekStart, weekEnd]);
+
+  // Tasks with dueDate in this week range that are NOT completed
+  const pendingThisWeek = useMemo(() =>
+    tasks.filter(t =>
+      t.dueDate &&
+      t.dueDate.slice(0, 10) >= weekStart &&
+      t.dueDate.slice(0, 10) <= weekEnd &&
+      t.status !== 'completed'
+    ).sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '')),
+    [tasks, weekStart, weekEnd]);
 
   // Daily breakdown
   const dailyData = useMemo(() => {
@@ -378,6 +388,60 @@ export default function WeeklyDashboard() {
         </Section>
       </div>
 
+      {/* Pending Tasks This Week */}
+      {isThisWeek && pendingThisWeek.length > 0 && (
+        <div className="mt-6">
+          <Section title={`이번 주 미완료 작업 (${pendingThisWeek.length})`} icon={<Circle size={16} />}>
+            <div className="space-y-1">
+              {pendingThisWeek.map(task => {
+                const goal = goals.find(g => g.id === task.goalId);
+                return (
+                  <div
+                    key={task.id}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-black/[0.02] transition-colors"
+                  >
+                    <button
+                      onClick={async () => {
+                        await updateTask(task.id, { status: 'completed', completedAt: new Date().toISOString() });
+                        load();
+                      }}
+                      className="flex-shrink-0 transition-opacity hover:opacity-70"
+                      style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', lineHeight: 0 }}
+                      title="완료 처리"
+                    >
+                      <Circle size={14} style={{ color: 'var(--text-tertiary)' }} />
+                    </button>
+                    <span
+                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{ background: PRIORITY_COLORS[task.priority] || '#6b7280' }}
+                    />
+                    <span className="text-sm flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
+                      {task.title}
+                    </span>
+                    {goal && (
+                      <span
+                        className="text-[11px] px-1.5 py-0.5 rounded flex-shrink-0"
+                        style={{
+                          background: (goal.color || '#6366f1') + '15',
+                          color: goal.color || '#6366f1',
+                        }}
+                      >
+                        {goal.title}
+                      </span>
+                    )}
+                    {task.dueDate && (
+                      <span className="text-[11px] flex-shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+                        {fmt(new Date(task.dueDate))}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Section>
+        </div>
+      )}
+
       {/* Completed Tasks List */}
       <div className="mt-6">
         <Section title={`완료한 작업 (${completedThisWeek.length})`} icon={<CheckCircle2 size={16} />}>
@@ -397,12 +461,22 @@ export default function WeeklyDashboard() {
                       key={task.id}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-black/[0.02] transition-colors"
                     >
-                      <CheckCircle2 size={14} style={{ color: '#059669', flexShrink: 0 }} />
+                      <button
+                        onClick={async () => {
+                          await updateTask(task.id, { status: 'pending', completedAt: null });
+                          load();
+                        }}
+                        className="flex-shrink-0 transition-opacity hover:opacity-50"
+                        style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', lineHeight: 0 }}
+                        title="완료 취소"
+                      >
+                        <CheckCircle2 size={14} style={{ color: '#059669' }} />
+                      </button>
                       <span
                         className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                         style={{ background: PRIORITY_COLORS[task.priority] || '#6b7280' }}
                       />
-                      <span className="text-sm flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
+                      <span className="text-sm flex-1 truncate" style={{ color: 'var(--text-tertiary)', textDecoration: 'line-through' }}>
                         {task.title}
                       </span>
                       {goal && (

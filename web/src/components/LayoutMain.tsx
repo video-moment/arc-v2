@@ -12,8 +12,8 @@ export function LayoutMain({ children }: { children: React.ReactNode }) {
 
   return (
     <main
-      className="min-h-screen transition-all duration-300"
-      style={{ marginLeft: isFullWidth ? 0 : (collapsed ? '56px' : '240px') }}
+      className="min-h-screen transition-all duration-300 bg-background"
+      style={{ marginLeft: isFullWidth ? 0 : (collapsed ? '60px' : '240px') }}
     >
       {children}
     </main>

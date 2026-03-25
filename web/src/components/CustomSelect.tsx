@@ -132,7 +132,7 @@ export default function CustomSelect({
               width: '100%', padding: isSm ? '6px 10px' : '8px 12px',
               fontSize: isSm ? '11px' : '13px', textAlign: 'left',
               background: isSelected ? 'var(--accent-soft)' : 'transparent',
-              color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
+              color: isSelected ? 'var(--color-accent)' : 'var(--text-primary)',
               border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
               transition: 'background 0.1s ease',
             }}
@@ -148,7 +148,7 @@ export default function CustomSelect({
             )}
             <span style={{ flex: 1 }}>{option.label}</span>
             {isSelected && (
-              <span style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center' }}>
+              <span style={{ color: 'var(--color-accent)', display: 'flex', alignItems: 'center' }}>
                 <CheckMark size={isSm ? 10 : 12} />
               </span>
             )}

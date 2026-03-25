@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import TaskItem from '@/components/TaskItem';
 import StatsPanel from '@/components/StatsPanel';
 import { PlusIcon } from '@/components/Icons';
@@ -77,7 +78,19 @@ function SortableTaskItem(props: { id: string; children: React.ReactNode }) {
   );
 }
 
-export default function TasksPage() {
+export default function TasksPageWrapper() {
+  return (
+    <Suspense>
+      <TasksPage />
+    </Suspense>
+  );
+}
+
+function TasksPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [projects, setProjects] = useState<TaskProject[]>([]);
   const [subprojects, setSubprojects] = useState<TaskSubproject[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -108,8 +121,22 @@ export default function TasksPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
+  // Feature 1: 오늘 포커스 뷰
+  const [focusMode, setFocusMode] = useState(false);
+
+  // Feature 2: 할일 그룹핑
+  const [groupBy, setGroupBy] = useState<'none' | 'goal' | 'priority' | 'dueDate'>('none');
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  // Feature 3: 벌크 액션
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // URL sync initialized flag
+  const urlInitialized = useRef(false);
+
   // Completed tasks collapsed by default
-  const [completedExpanded, setCompletedExpanded] = useState(false);
+  const [completedExpanded, setCompletedExpanded] = useState(true);
 
   const load = useCallback(async () => {
     const [p, sp, t, g, agentResult] = await Promise.all([
@@ -125,6 +152,42 @@ export default function TasksPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Feature 4: URL sync — read on mount
+  useEffect(() => {
+    if (urlInitialized.current) return;
+    urlInitialized.current = true;
+    const f = searchParams.get('filter');
+    const s = searchParams.get('sort');
+    const q = searchParams.get('search');
+    const g = searchParams.get('group');
+    const fc = searchParams.get('focus');
+    if (f && ['all', 'high', 'due_soon', 'in_progress', 'assignee_me', 'assignee_agent'].includes(f)) {
+      setFilterType(f as FilterType);
+    }
+    if (s && ['recommended', 'priority', 'due_date', 'recent'].includes(s)) {
+      setSortType(s as SortType);
+    }
+    if (q) setSearchQuery(q);
+    if (g && ['none', 'goal', 'priority', 'dueDate'].includes(g)) {
+      setGroupBy(g as 'none' | 'goal' | 'priority' | 'dueDate');
+    }
+    if (fc === '1') setFocusMode(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Feature 4: URL sync — write on change
+  useEffect(() => {
+    if (!urlInitialized.current) return;
+    const params = new URLSearchParams();
+    if (filterType !== 'all') params.set('filter', filterType);
+    if (sortType !== 'recommended') params.set('sort', sortType);
+    if (searchQuery.trim()) params.set('search', searchQuery.trim());
+    if (groupBy !== 'none') params.set('group', groupBy);
+    if (focusMode) params.set('focus', '1');
+    const qs = params.toString();
+    router.replace(pathname + (qs ? '?' + qs : ''), { scroll: false });
+  }, [filterType, sortType, searchQuery, groupBy, focusMode, pathname, router]);
 
   // Quick add input ref for re-focus after submit
   const quickAddInputRef = useRef<HTMLInputElement>(null);
@@ -179,8 +242,22 @@ export default function TasksPage() {
   // Apply filter + search + sort
   const { pendingTasks, completedTasks } = useMemo(() => {
     const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
     let pending = baseTasks.filter(t => t.status !== 'completed');
     const completed = baseTasks.filter(t => t.status === 'completed');
+
+    // Feature 1: Focus mode override
+    if (focusMode) {
+      const allScored = [...baseTasks.filter(t => t.status !== 'completed')]
+        .sort((a, b) => calcScore(b) - calcScore(a))
+        .slice(0, 3);
+      const top3Ids = new Set(allScored.map(t => t.id));
+      pending = pending.filter(t =>
+        (t.dueDate && t.dueDate.slice(0, 10) <= todayStr) ||
+        t.status === 'in_progress' ||
+        top3Ids.has(t.id)
+      );
+    }
 
     // Filter
     if (filterType === 'high') {
@@ -226,7 +303,7 @@ export default function TasksPage() {
     }
 
     return { pendingTasks: pending, completedTasks: completed };
-  }, [baseTasks, filterType, sortType, searchQuery]);
+  }, [baseTasks, filterType, sortType, searchQuery, focusMode]);
 
   // Today dashboard summary (uses ALL tasks, not filtered)
   const todaySummary = useMemo(() => {
@@ -249,6 +326,89 @@ export default function TasksPage() {
       .slice(0, 3);
     return new Set(sorted.map(t => t.id));
   }, [tasks]);
+
+  // Feature 2: grouped tasks
+  const groupedTasks = useMemo(() => {
+    if (groupBy === 'none') return null;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const weekEnd = new Date(now);
+    weekEnd.setDate(now.getDate() + (7 - now.getDay()));
+    const weekEndStr = weekEnd.toISOString().split('T')[0];
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+    const groupMap = new Map<string, Task[]>();
+
+    for (const task of pendingTasks) {
+      let key: string;
+      if (groupBy === 'goal') {
+        const g = task.goalId ? goals.find(x => x.id === task.goalId) : null;
+        key = g ? g.title : '미분류';
+      } else if (groupBy === 'priority') {
+        key = task.priority === 'high' ? '높음' : task.priority === 'medium' ? '보통' : '낮음';
+      } else { // dueDate
+        if (!task.dueDate) {
+          key = '미설정';
+        } else {
+          const d = task.dueDate.slice(0, 10);
+          if (d < todayStr) key = '기한 초과';
+          else if (d === todayStr) key = '오늘';
+          else if (d <= weekEndStr) key = '이번 주';
+          else if (d <= monthEnd) key = '이번 달';
+          else key = '나중에';
+        }
+      }
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key)!.push(task);
+    }
+
+    // Sort group keys
+    const orderMap: Record<string, number> = groupBy === 'priority'
+      ? { '높음': 0, '보통': 1, '낮음': 2 }
+      : groupBy === 'dueDate'
+      ? { '기한 초과': 0, '오늘': 1, '이번 주': 2, '이번 달': 3, '나중에': 4, '미설정': 5 }
+      : {};
+
+    return [...groupMap.entries()]
+      .sort(([a], [b]) => {
+        const ao = orderMap[a] ?? 99;
+        const bo = orderMap[b] ?? 99;
+        return ao !== bo ? ao - bo : a.localeCompare(b);
+      })
+      .map(([label, items]) => ({ label, items }));
+  }, [pendingTasks, groupBy, goals]);
+
+  // Feature 3: bulk action handlers
+  const handleBulkComplete = async () => {
+    await Promise.all([...selectedIds].map(id => updateTask(id, { status: 'completed', completedAt: new Date().toISOString() })));
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    load();
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(selectedIds.size + '개 항목을 삭제할까요?')) return;
+    await Promise.all([...selectedIds].map(id => deleteTask(id)));
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    load();
+  };
+
+  const handleBulkPriority = async (priority: string) => {
+    await Promise.all([...selectedIds].map(id => updateTask(id, { priority })));
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    load();
+  };
+
+  const toggleSelectId = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   // Handlers
   const [creating, setCreating] = useState(false);
@@ -516,7 +676,7 @@ export default function TasksPage() {
               className="p-1.5 rounded-md transition-all"
               style={{
                 background: showStats ? 'var(--accent-soft)' : 'transparent',
-                color: showStats ? 'var(--accent)' : 'var(--text-tertiary)',
+                color: showStats ? '#7c3aed' : 'var(--text-tertiary)',
               }}
               title={showStats ? '통계 닫기' : '통계 보기'}
             >
@@ -781,12 +941,12 @@ export default function TasksPage() {
                         key={dateStr}
                         className="flex gap-3 py-2.5 rounded-lg px-3 transition-colors"
                         style={{
-                          background: isToday ? 'var(--accent-soft)' : 'transparent',
-                          opacity: isPast && !isToday ? 0.5 : 1,
+                          background: isToday ? 'rgba(124, 58, 237, 0.08)' : 'transparent',
+                          opacity: isPast && !isToday ? 0.6 : 1,
                         }}
                       >
                         <div className="flex-shrink-0 w-14 text-right">
-                          <span className="text-xs font-semibold" style={{ color: isToday ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                          <span className="text-xs font-semibold" style={{ color: isToday ? '#7c3aed' : 'var(--text-secondary)' }}>
                             {DAY_LABELS[i]}
                           </span>
                           <span className="text-[10px] ml-1" style={{ color: 'var(--text-tertiary)' }}>
@@ -815,7 +975,7 @@ export default function TasksPage() {
                               {completedDay.map(t => (
                                 <div key={t.id} className="flex items-center gap-2">
                                   <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#16a34a' }} />
-                                  <span className="text-xs truncate line-through" style={{ color: 'var(--text-tertiary)' }}>{t.title}</span>
+                                  <span className="text-xs truncate line-through" style={{ color: 'var(--text-secondary)' }}>{t.title}</span>
                                 </div>
                               ))}
                             </div>
@@ -828,6 +988,240 @@ export default function TasksPage() {
               );
             })()}
           </div>{/* end Block 3 */}
+
+          {/* Block 4: 전체 할 일 (filter + group + focus + bulk) */}
+          <div
+            className="mt-6 rounded-xl"
+            style={{
+              background: 'var(--bg-elevated)',
+              padding: '24px 28px',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03)',
+            }}
+          >
+            {/* Section header row */}
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                전체 할 일
+                {pendingTasks.length > 0 && (
+                  <span className="ml-2 text-xs font-normal" style={{ color: 'var(--text-tertiary)' }}>{pendingTasks.length}개</span>
+                )}
+              </h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Feature 1: Focus mode toggle */}
+                <button
+                  onClick={() => setFocusMode(m => !m)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    background: focusMode ? '#fef3c7' : 'var(--bg-secondary)',
+                    color: focusMode ? '#92400e' : 'var(--text-secondary)',
+                    border: '1px solid ' + (focusMode ? '#fde68a' : 'var(--border-subtle)'),
+                  }}
+                  title="오늘 포커스 모드"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                    <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                  </svg>
+                  오늘 포커스
+                </button>
+
+                {/* Feature 3: Select mode toggle */}
+                <button
+                  onClick={() => { setSelectMode(m => !m); setSelectedIds(new Set()); }}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    background: selectMode ? 'var(--accent-soft)' : 'var(--bg-secondary)',
+                    color: selectMode ? '#7c3aed' : 'var(--text-secondary)',
+                    border: '1px solid ' + (selectMode ? '#c4b5fd' : 'var(--border-subtle)'),
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                  </svg>
+                  선택
+                </button>
+              </div>
+            </div>
+
+            {/* Filter pills + sort + search row */}
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              {/* Search */}
+              <div className="relative flex items-center">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  className="absolute left-2.5 pointer-events-none" style={{ color: 'var(--text-tertiary)' }}>
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="검색..."
+                  className="pl-7 pr-3 py-1 rounded-md text-xs outline-none"
+                  style={{
+                    background: 'var(--bg-input)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border)',
+                    width: '130px',
+                  }}
+                />
+              </div>
+
+              {/* Filter pills */}
+              {FILTERS.map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setFilterType(f.key)}
+                  className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                  style={{
+                    background: filterType === f.key ? 'var(--accent-soft)' : 'var(--bg-secondary)',
+                    color: filterType === f.key ? '#7c3aed' : 'var(--text-secondary)',
+                    border: '1px solid ' + (filterType === f.key ? '#c4b5fd' : 'var(--border-subtle)'),
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Sort + Group controls row */}
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              {/* Sort */}
+              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>정렬:</span>
+              {SORTS.map(s => (
+                <button
+                  key={s.key}
+                  onClick={() => setSortType(s.key)}
+                  className="px-2 py-0.5 rounded text-xs transition-all"
+                  style={{
+                    background: sortType === s.key ? 'var(--bg-secondary)' : 'transparent',
+                    color: sortType === s.key ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    fontWeight: sortType === s.key ? 600 : 400,
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+
+              <span className="text-xs ml-2" style={{ color: 'var(--text-tertiary)' }}>그룹:</span>
+              {([
+                { key: 'none', label: '없음' },
+                { key: 'goal', label: '목표별' },
+                { key: 'priority', label: '우선순위' },
+                { key: 'dueDate', label: '마감일' },
+              ] as const).map(g => (
+                <button
+                  key={g.key}
+                  onClick={() => setGroupBy(g.key)}
+                  className="px-2 py-0.5 rounded text-xs transition-all"
+                  style={{
+                    background: groupBy === g.key ? 'var(--bg-secondary)' : 'transparent',
+                    color: groupBy === g.key ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    fontWeight: groupBy === g.key ? 600 : 400,
+                  }}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Task list: grouped or flat */}
+            {pendingTasks.length === 0 ? (
+              <div className="py-6 text-center">
+                <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+                  {focusMode ? '포커스 할 일이 없습니다' : '표시할 할 일이 없습니다'}
+                </p>
+              </div>
+            ) : groupBy !== 'none' && groupedTasks ? (
+              <div className="space-y-4">
+                {groupedTasks.map(({ label, items }) => {
+                  const isCollapsed = collapsedGroups.has(label);
+                  const groupColor = groupBy === 'priority'
+                    ? (label === '높음' ? '#dc2626' : label === '보통' ? '#d97706' : '#3b82f6')
+                    : 'var(--text-secondary)';
+                  return (
+                    <div key={label}>
+                      <button
+                        className="flex items-center gap-2 mb-2 w-full text-left"
+                        onClick={() => setCollapsedGroups(prev => {
+                          const next = new Set(prev);
+                          if (next.has(label)) next.delete(label);
+                          else next.add(label);
+                          return next;
+                        })}
+                      >
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: groupColor }} />
+                        <span className="text-xs font-semibold" style={{ color: groupColor }}>{label}</span>
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded-full"
+                          style={{ background: 'var(--bg-secondary)', color: 'var(--text-tertiary)' }}
+                        >
+                          {items.length}
+                        </span>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                          style={{ color: 'var(--text-tertiary)', marginLeft: 'auto', transform: isCollapsed ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 0.2s ease' }}>
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </button>
+                      {!isCollapsed && (
+                        <div className="space-y-1 pl-4">
+                          {items.map(t => (
+                            <div key={t.id} className="flex items-center gap-2">
+                              {selectMode && (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.has(t.id)}
+                                  onChange={() => toggleSelectId(t.id)}
+                                  className="flex-shrink-0 cursor-pointer"
+                                  style={{ accentColor: '#7c3aed', width: '14px', height: '14px' }}
+                                />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <TaskItem
+                                  task={t}
+                                  onToggleComplete={handleToggleComplete}
+                                  onDelete={handleDeleteTask}
+                                  onUpdate={handleUpdateTask}
+                                  goals={goals}
+                                  agents={agents}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {pendingTasks.map(t => (
+                  <div key={t.id} className="flex items-center gap-2">
+                    {selectMode && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(t.id)}
+                        onChange={() => toggleSelectId(t.id)}
+                        className="flex-shrink-0 cursor-pointer"
+                        style={{ accentColor: '#7c3aed', width: '14px', height: '14px' }}
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <TaskItem
+                        task={t}
+                        onToggleComplete={handleToggleComplete}
+                        onDelete={handleDeleteTask}
+                        onUpdate={handleUpdateTask}
+                        goals={goals}
+                        agents={agents}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>{/* end Block 4 */}
 
         </div>
       </div>
@@ -846,6 +1240,81 @@ export default function TasksPage() {
         />
       </div>
       </div>{/* end flex row */}
+
+      {/* Feature 3: Floating bulk action bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl"
+          style={{
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+          }}
+        >
+          <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {selectedIds.size}개 선택됨
+          </span>
+          <div style={{ width: '1px', height: '16px', background: 'var(--border-subtle)' }} />
+          <button
+            onClick={handleBulkComplete}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+            style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            완료
+          </button>
+          <div className="relative group">
+            <button
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+              style={{ background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a' }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+              </svg>
+              우선순위 변경
+            </button>
+            <div
+              className="absolute bottom-full mb-2 left-0 hidden group-hover:flex flex-col gap-1 p-1 rounded-lg z-10"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}
+            >
+              {[
+                { val: 'high', label: '높음', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+                { val: 'medium', label: '보통', color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+                { val: 'low', label: '낮음', color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
+              ].map(p => (
+                <button
+                  key={p.val}
+                  onClick={() => handleBulkPriority(p.val)}
+                  className="px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap"
+                  style={{ background: p.bg, color: p.color, border: '1px solid ' + p.border }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={handleBulkDelete}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+            style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+            삭제
+          </button>
+          <button
+            onClick={() => { setSelectMode(false); setSelectedIds(new Set()); }}
+            className="px-2 py-1 rounded-lg text-xs transition-all"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            취소
+          </button>
+        </div>
+      )}
+
       <UndoToast entries={undo.entries} onRemove={undo.remove} />
     </div>
   );

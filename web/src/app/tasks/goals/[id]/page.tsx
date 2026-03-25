@@ -13,12 +13,11 @@ import { DndContext, closestCenter, type DragEndEvent, PointerSensor, useSensor,
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  type TaskProject, type Task, type TaskGoal, type TaskMilestone, type TaskEpisode,
+  type TaskProject, type Task, type TaskGoal, type TaskEpisode,
   getTaskProjects, getTasks,
   createTask, updateTask, deleteTask,
   getTaskGoals, updateTaskGoal, deleteTaskGoal,
   createTaskEpisode, getTaskEpisodes,
-  getTaskMilestones, createTaskMilestone, updateTaskMilestone, deleteTaskMilestone,
   reorderTasks,
 } from '@/lib/api';
 
@@ -67,170 +66,6 @@ function SortableTaskItem(props: { id: string; children: React.ReactNode }) {
       {...listeners}
     >
       {props.children}
-    </div>
-  );
-}
-
-// ── Milestone Section ──
-
-function MilestoneSection({ goalId }: { goalId: string }) {
-  const [milestones, setMilestones] = useState<TaskMilestone[]>([]);
-  const [adding, setAdding] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const data = await getTaskMilestones(goalId);
-      setMilestones(data);
-    } catch { /* silently ignore */ }
-  }, [goalId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const handleToggle = async (m: TaskMilestone) => {
-    try {
-      await updateTaskMilestone(m.id, {
-        isCompleted: !m.isCompleted,
-        completedAt: m.isCompleted ? null : new Date().toISOString(),
-      });
-      load();
-    } catch { /* ignore */ }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteTaskMilestone(id);
-      load();
-    } catch { /* ignore */ }
-  };
-
-  const handleAdd = async () => {
-    const title = newTitle.trim();
-    if (!title) { setAdding(false); return; }
-    try {
-      await createTaskMilestone(goalId, title);
-      setNewTitle('');
-      setAdding(false);
-      load();
-    } catch { /* ignore */ }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleAdd();
-    if (e.key === 'Escape') { setAdding(false); setNewTitle(''); }
-  };
-
-  useEffect(() => {
-    if (adding) setTimeout(() => inputRef.current?.focus(), 30);
-  }, [adding]);
-
-  const completedCount = milestones.filter(m => m.isCompleted).length;
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <h3
-          style={{
-            fontSize: '12px',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            color: 'var(--text-tertiary)',
-            margin: 0,
-          }}
-        >
-          마일스톤 {milestones.length > 0 && '(' + completedCount + '/' + milestones.length + ')'}
-        </h3>
-      </div>
-
-      {milestones.length === 0 && !adding && (
-        <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', fontStyle: 'italic', margin: '0 0 6px' }}>없음</p>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-        {milestones.map(m => (
-          <div
-            key={m.id}
-            className="group"
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 2px' }}
-          >
-            <button
-              onClick={() => handleToggle(m)}
-              style={{
-                flexShrink: 0, width: '15px', height: '15px', borderRadius: '50%',
-                border: m.isCompleted ? 'none' : '1.5px solid var(--border-subtle)',
-                background: m.isCompleted ? 'var(--green)' : 'transparent',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: 0, outline: 'none',
-              }}
-            >
-              {m.isCompleted && (
-                <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
-                  <polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </button>
-            <span
-              style={{
-                flex: 1, fontSize: '13px',
-                color: m.isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)',
-                textDecoration: m.isCompleted ? 'line-through' : 'none',
-              }}
-            >
-              {m.title}
-            </span>
-            <button
-              onClick={() => handleDelete(m.id)}
-              className="opacity-0 group-hover:opacity-100"
-              style={{
-                flexShrink: 0, padding: '1px 4px', border: 'none', background: 'transparent',
-                color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '13px', lineHeight: 1,
-                borderRadius: '4px', transition: 'opacity 0.1s ease',
-              }}
-            >
-              x
-            </button>
-          </div>
-        ))}
-
-        {adding && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 2px' }}>
-            <div
-              style={{
-                flexShrink: 0, width: '15px', height: '15px', borderRadius: '50%',
-                border: '1.5px solid var(--border-subtle)', background: 'transparent',
-              }}
-            />
-            <input
-              ref={inputRef}
-              value={newTitle}
-              onChange={e => setNewTitle(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onBlur={handleAdd}
-              placeholder="마일스톤 입력..."
-              style={{
-                flex: 1, fontSize: '13px', color: 'var(--text-primary)', background: 'transparent',
-                border: 'none', borderBottom: '1px solid var(--border-subtle)', outline: 'none', padding: '0 0 2px',
-              }}
-            />
-          </div>
-        )}
-      </div>
-
-      {!adding && (
-        <button
-          onClick={() => setAdding(true)}
-          style={{
-            marginTop: '8px', fontSize: '12px', color: 'var(--text-tertiary)',
-            background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
-          }}
-          onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
-        >
-          + 마일스톤 추가
-        </button>
-      )}
     </div>
   );
 }
@@ -302,7 +137,7 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) =
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value); setEditing(false); } }}
         autoFocus
         className="text-xl font-bold tracking-tight bg-transparent outline-none w-full"
-        style={{ color: 'var(--text-primary)', border: 'none', borderBottom: '1px solid var(--accent)' }}
+        style={{ color: 'var(--text-primary)', border: 'none', borderBottom: '1px solid var(--color-accent)' }}
       />
     );
   }
@@ -608,7 +443,7 @@ export default function GoalDetailPage() {
     );
   }
 
-  const barColor = progress >= 1 ? 'var(--green)' : goal.color || 'var(--accent)';
+  const barColor = progress >= 1 ? 'var(--green)' : goal.color || 'var(--color-accent)';
 
   // Deadline info
   const now = new Date();
@@ -653,7 +488,7 @@ export default function GoalDetailPage() {
           }}
         >
           {/* Color bar at top */}
-          <div style={{ height: '4px', background: goal.color || 'var(--accent)' }} />
+          <div style={{ height: '4px', background: goal.color || 'var(--color-accent)' }} />
 
           <div style={{ padding: '24px 28px' }}>
             {/* Title row */}
@@ -802,20 +637,9 @@ export default function GoalDetailPage() {
           </div>
         </div>
 
-        {/* Milestone & Episode sections */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div
-            className="rounded-xl"
-            style={{
-              background: 'var(--bg-elevated)',
-              padding: '20px 24px',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.03)',
-            }}
-          >
-            <MilestoneSection goalId={goalId} />
-          </div>
-
-          {goal.goalType === 'series' && (
+        {/* Episode section */}
+        {goal.goalType === 'series' && (
+          <div className="mb-6">
             <div
               className="rounded-xl"
               style={{
@@ -826,8 +650,8 @@ export default function GoalDetailPage() {
             >
               <EpisodeSection goalId={goalId} />
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Task list section */}
         <div

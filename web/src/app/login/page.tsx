@@ -65,7 +65,7 @@ export default function LoginPage() {
               onChange={e => setPassword(e.target.value)}
               placeholder="비밀번호"
               autoFocus
-              className="w-full rounded-xl px-4 py-3.5 text-sm outline-none transition-all focus:ring-2 focus:ring-[var(--accent)]/30"
+              className="w-full rounded-xl px-4 py-3.5 text-sm outline-none transition-all focus:ring-2 focus:ring-[var(--color-accent)]/30"
               style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
             />
           </div>

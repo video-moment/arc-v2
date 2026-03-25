@@ -193,7 +193,7 @@ export function ChatUI({ initialDomainId }: ChatUIProps) {
                 >
                   <svg
                     className="w-7 h-7"
-                    style={{ color: 'var(--accent)', opacity: 0.6 }}
+                    style={{ color: 'var(--color-accent)', opacity: 0.6 }}
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -228,8 +228,8 @@ export function ChatUI({ initialDomainId }: ChatUIProps) {
                         background: 'transparent',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--accent)';
-                        e.currentTarget.style.color = 'var(--accent)';
+                        e.currentTarget.style.borderColor = 'var(--color-accent)';
+                        e.currentTarget.style.color = 'var(--color-accent)';
                         e.currentTarget.style.background = 'var(--accent-soft)';
                       }}
                       onMouseLeave={(e) => {

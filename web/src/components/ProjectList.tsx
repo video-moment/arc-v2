@@ -162,7 +162,7 @@ export default function ProjectList({
                   style={{
                     background: isGoalSelected ? 'var(--accent-soft)' : 'transparent',
                     color: isGoalSelected ? 'var(--accent-hover)' : 'var(--text-secondary)',
-                    borderLeft: isGoalSelected ? '3px solid var(--accent)' : '3px solid transparent',
+                    borderLeft: isGoalSelected ? '3px solid var(--color-accent)' : '3px solid transparent',
                   }}
                   onMouseEnter={e => {
                     if (!isGoalSelected) e.currentTarget.style.background = 'var(--bg-hover, var(--bg-elevated))';
@@ -173,7 +173,7 @@ export default function ProjectList({
                 >
                   <span
                     className="flex-shrink-0 rounded-full"
-                    style={{ width: '8px', height: '8px', background: goal.color || 'var(--accent)' }}
+                    style={{ width: '8px', height: '8px', background: goal.color || 'var(--color-accent)' }}
                   />
                   <span className="flex-1 truncate text-left">{goal.title}</span>
                   <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--text-tertiary)' }}>
@@ -210,7 +210,7 @@ export default function ProjectList({
                   style={{
                     background: isSelected ? 'var(--accent-soft)' : 'transparent',
                     color: isSelected ? 'var(--accent-hover)' : 'var(--text-secondary)',
-                    borderLeft: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
+                    borderLeft: isSelected ? '3px solid var(--color-accent)' : '3px solid transparent',
                     transform: 'translateX(0)',
                   }}
                   onMouseEnter={e => {
@@ -264,7 +264,7 @@ export default function ProjectList({
                           style={{
                             background: isSubSelected ? 'var(--accent-soft)' : 'transparent',
                             color: isSubSelected ? 'var(--accent-hover)' : 'var(--text-tertiary)',
-                            borderLeft: isSubSelected ? '3px solid var(--accent)' : '3px solid transparent',
+                            borderLeft: isSubSelected ? '3px solid var(--color-accent)' : '3px solid transparent',
                             transform: 'translateX(0)',
                           }}
                           onMouseEnter={e => {

@@ -81,7 +81,7 @@ export function RuleEditor({ domainId }: RuleEditorProps) {
           }}
           className="text-[11px] px-3 py-1.5 rounded-md font-medium transition-colors"
           style={{
-            background: showForm ? 'var(--bg-hover)' : 'var(--accent)',
+            background: showForm ? 'var(--bg-hover)' : 'var(--color-accent)',
             color: showForm ? 'var(--text-secondary)' : '#fff',
           }}
         >
@@ -101,7 +101,7 @@ export function RuleEditor({ domainId }: RuleEditorProps) {
               border: '1px solid var(--border)',
               color: 'var(--text-primary)',
             }}
-            onFocus={e => { (e.target as HTMLElement).style.borderColor = 'var(--accent)'; }}
+            onFocus={e => { (e.target as HTMLElement).style.borderColor = 'var(--color-accent)'; }}
             onBlur={e => { (e.target as HTMLElement).style.borderColor = 'var(--border)'; }}
           />
           <textarea
@@ -115,7 +115,7 @@ export function RuleEditor({ domainId }: RuleEditorProps) {
               border: '1px solid var(--border)',
               color: 'var(--text-primary)',
             }}
-            onFocus={e => { (e.target as HTMLElement).style.borderColor = 'var(--accent)'; }}
+            onFocus={e => { (e.target as HTMLElement).style.borderColor = 'var(--color-accent)'; }}
             onBlur={e => { (e.target as HTMLElement).style.borderColor = 'var(--border)'; }}
           />
           <div className="flex items-center gap-2">

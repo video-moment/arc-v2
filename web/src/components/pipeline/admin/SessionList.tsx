@@ -71,7 +71,7 @@ export function SessionList({ domainId, selectedId, onSelect, onFirstLoad }: Ses
               className="w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all"
               style={{
                 background: isSelected ? 'var(--accent-soft)' : 'transparent',
-                border: isSelected ? '1px solid var(--accent)' : '1px solid transparent',
+                border: isSelected ? '1px solid var(--color-accent)' : '1px solid transparent',
               }}
               onMouseEnter={e => {
                 if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';

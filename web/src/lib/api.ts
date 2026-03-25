@@ -83,6 +83,12 @@ export interface Task {
   goalId?: string;
   assigneeType: 'me' | 'agent';
   assigneeAgentId?: string;
+  recurrence?: 'daily' | 'weekly' | 'monthly' | null;
+  recurrenceParentId?: string;
+  blockedBy?: string;
+  estimatedMinutes?: number;
+  actualMinutes?: number;
+  notes: string;
 }
 
 export type AssigneeType = 'me' | 'agent';
@@ -99,7 +105,7 @@ export interface TaskGoal {
   id: string;
   title: string;
   description: string;
-  status: 'active' | 'completed' | 'archived';
+  status: 'active' | 'completed' | 'archived' | 'on_hold';
   priority: 'high' | 'medium' | 'low';
   goalType: 'achievement' | 'series';
   targetDate?: string;
@@ -113,6 +119,7 @@ export interface TaskGoal {
   episodeTarget?: string;
   lastEpisodeAt?: string;
   category?: string;
+  pausedAt?: string;
 }
 
 export interface MessageReaction {
@@ -227,6 +234,12 @@ function toTask(row: any): Task {
     goalId: row.goal_id ?? undefined,
     assigneeType: row.assignee_type ?? 'me',
     assigneeAgentId: row.assignee_agent_id ?? undefined,
+    recurrence: row.recurrence ?? null,
+    recurrenceParentId: row.recurrence_parent_id ?? undefined,
+    blockedBy: row.blocked_by ?? undefined,
+    estimatedMinutes: row.estimated_minutes ?? undefined,
+    actualMinutes: row.actual_minutes ?? undefined,
+    notes: row.notes || '',
   };
 }
 
@@ -249,6 +262,7 @@ function toTaskGoal(row: any): TaskGoal {
     episodeTarget: row.episode_target ?? undefined,
     lastEpisodeAt: row.last_episode_at ?? undefined,
     category: row.category ?? undefined,
+    pausedAt: row.paused_at ?? undefined,
   };
 }
 
@@ -457,21 +471,35 @@ export async function createTask(input: {
   goalId?: string;
   assigneeType?: string;
   assigneeAgentId?: string;
+  recurrence?: 'daily' | 'weekly' | 'monthly' | null;
+  recurrenceParentId?: string;
+  blockedBy?: string;
+  estimatedMinutes?: number;
+  actualMinutes?: number;
+  notes?: string;
 }): Promise<Task> {
+  const insertObj: Record<string, any> = {
+    project_id: input.projectId || null,
+    subproject_id: input.subprojectId || null,
+    title: input.title,
+    description: input.description || '',
+    priority: input.priority || 'medium',
+    category: input.category,
+    due_date: input.dueDate,
+    goal_id: input.goalId || null,
+    assignee_type: input.assigneeType || 'me',
+    assignee_agent_id: input.assigneeAgentId || null,
+    notes: input.notes || '',
+  };
+  if (input.recurrence !== undefined) insertObj.recurrence = input.recurrence;
+  if (input.recurrenceParentId !== undefined) insertObj.recurrence_parent_id = input.recurrenceParentId;
+  if (input.blockedBy !== undefined) insertObj.blocked_by = input.blockedBy;
+  if (input.estimatedMinutes !== undefined) insertObj.estimated_minutes = input.estimatedMinutes;
+  if (input.actualMinutes !== undefined) insertObj.actual_minutes = input.actualMinutes;
+
   const { data, error } = await supabase
     .from('pomo_tasks')
-    .insert({
-      project_id: input.projectId || null,
-      subproject_id: input.subprojectId || null,
-      title: input.title,
-      description: input.description || '',
-      priority: input.priority || 'medium',
-      category: input.category,
-      due_date: input.dueDate,
-      goal_id: input.goalId || null,
-      assignee_type: input.assigneeType || 'me',
-      assignee_agent_id: input.assigneeAgentId || null,
-    })
+    .insert(insertObj)
     .select()
     .single();
   if (error) throw error;
@@ -490,6 +518,12 @@ export async function updateTask(id: string, updates: Partial<{
   goalId: string | null;
   assigneeType: string;
   assigneeAgentId: string | null;
+  recurrence: 'daily' | 'weekly' | 'monthly' | null;
+  recurrenceParentId: string | null;
+  blockedBy: string | null;
+  estimatedMinutes: number | null;
+  actualMinutes: number | null;
+  notes: string;
 }>): Promise<Task> {
   const dbUpdates: Record<string, any> = {};
   if (updates.title !== undefined) dbUpdates.title = updates.title;
@@ -503,6 +537,12 @@ export async function updateTask(id: string, updates: Partial<{
   if (updates.goalId !== undefined) dbUpdates.goal_id = updates.goalId;
   if (updates.assigneeType !== undefined) dbUpdates.assignee_type = updates.assigneeType;
   if (updates.assigneeAgentId !== undefined) dbUpdates.assignee_agent_id = updates.assigneeAgentId;
+  if (updates.recurrence !== undefined) dbUpdates.recurrence = updates.recurrence;
+  if (updates.recurrenceParentId !== undefined) dbUpdates.recurrence_parent_id = updates.recurrenceParentId;
+  if (updates.blockedBy !== undefined) dbUpdates.blocked_by = updates.blockedBy;
+  if (updates.estimatedMinutes !== undefined) dbUpdates.estimated_minutes = updates.estimatedMinutes;
+  if (updates.actualMinutes !== undefined) dbUpdates.actual_minutes = updates.actualMinutes;
+  if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
   const { data, error } = await supabase
     .from('pomo_tasks')
     .update(dbUpdates)
@@ -516,6 +556,35 @@ export async function updateTask(id: string, updates: Partial<{
 export async function deleteTask(id: string): Promise<void> {
   const { error } = await supabase.from('pomo_tasks').delete().eq('id', id);
   if (error) throw error;
+}
+
+export async function duplicateTaskForRecurrence(task: Task): Promise<Task> {
+  // Calculate next due date based on recurrence type
+  let nextDueDate: string | undefined;
+  if (task.dueDate && task.recurrence) {
+    const d = new Date(task.dueDate);
+    if (task.recurrence === 'daily') d.setDate(d.getDate() + 1);
+    else if (task.recurrence === 'weekly') d.setDate(d.getDate() + 7);
+    else if (task.recurrence === 'monthly') d.setMonth(d.getMonth() + 1);
+    nextDueDate = d.toISOString().split('T')[0];
+  }
+
+  return createTask({
+    title: task.title,
+    description: task.description,
+    priority: task.priority,
+    category: task.category,
+    dueDate: nextDueDate,
+    goalId: task.goalId,
+    projectId: task.projectId,
+    subprojectId: task.subprojectId,
+    assigneeType: task.assigneeType,
+    assigneeAgentId: task.assigneeAgentId,
+    recurrence: task.recurrence,
+    recurrenceParentId: task.recurrenceParentId || task.id,
+    estimatedMinutes: task.estimatedMinutes,
+    notes: task.notes,
+  });
 }
 
 // ── Task Goals ──

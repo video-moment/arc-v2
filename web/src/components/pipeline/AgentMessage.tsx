@@ -21,7 +21,7 @@ const AGENT_COLORS: Record<string, string> = {
   planner: 'var(--agent-planner)',
   actor: 'var(--agent-actor)',
   reviewer: 'var(--agent-reviewer)',
-  user: 'var(--accent)',
+  user: 'var(--color-accent)',
   system: 'var(--text-tertiary)',
 };
 

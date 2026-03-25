@@ -60,7 +60,7 @@ export function FlagList({ domainId }: FlagListProps) {
             onClick={() => setFilter(t.key)}
             className="px-3 py-2 text-xs font-medium transition-all"
             style={{
-              borderBottom: filter === t.key ? '2px solid var(--accent)' : '2px solid transparent',
+              borderBottom: filter === t.key ? '2px solid var(--color-accent)' : '2px solid transparent',
               color: filter === t.key ? 'var(--text-primary)' : 'var(--text-tertiary)',
             }}
           >

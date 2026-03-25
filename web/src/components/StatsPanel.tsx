@@ -34,7 +34,7 @@ export default function StatsPanel({ tasks, goals }: Props) {
       {/* Stats grid */}
       <div className="grid grid-cols-3 gap-3">
         <StatCard value={completedTasks} label="완료" color="var(--green)" />
-        <StatCard value={pendingTasks} label="진행 중" color="var(--accent)" />
+        <StatCard value={pendingTasks} label="진행 중" color="var(--color-accent)" />
         <StatCard value={completionRate + '%'} label="달성률" color="var(--blue)" />
       </div>
 
@@ -79,7 +79,7 @@ export default function StatsPanel({ tasks, goals }: Props) {
                     <div className="flex items-center gap-2">
                       <span
                         className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ background: goal.color || 'var(--accent)' }}
+                        style={{ background: goal.color || 'var(--color-accent)' }}
                       />
                       <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                         {goal.title}
@@ -97,7 +97,7 @@ export default function StatsPanel({ tasks, goals }: Props) {
                       className="h-full rounded-full transition-all"
                       style={{
                         width: pct + '%',
-                        background: pct === 100 ? 'var(--green)' : (goal.color || 'var(--accent)'),
+                        background: pct === 100 ? 'var(--green)' : (goal.color || 'var(--color-accent)'),
                         transition: 'width 0.4s ease',
                       }}
                     />

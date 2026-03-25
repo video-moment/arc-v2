@@ -2,7 +2,7 @@
 
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Code2, Video, Settings, Palette, BookOpen, MoreHorizontal, Target } from 'lucide-react';
+import { Code2, Video, Settings, Palette, BookOpen, MoreHorizontal, Target, Pause } from 'lucide-react';
 import type { TaskGoal, Task, TaskProject } from '@/lib/api';
 import CustomSelect from '@/components/CustomSelect';
 import CustomDatePicker from '@/components/CustomDatePicker';
@@ -72,7 +72,7 @@ function GoalCard({ goal, tasks, isSelected, onSelect, onOpenDetail, onDoubleCli
   const totalCount = goalTasks.length;
   const progress = totalCount > 0 ? Math.min(completedCount / totalCount, 1) : 0;
   const progressPct = Math.round(progress * 100);
-  const barColor = progress >= 1 ? 'var(--green)' : goal.color || 'var(--accent)';
+  const barColor = progress >= 1 ? 'var(--green)' : goal.color || 'var(--color-accent)';
 
   const meTasks = goalTasks.filter(t => !t.assigneeType || t.assigneeType === 'me');
   const agentTasks = goalTasks.filter(t => t.assigneeType === 'agent');
@@ -96,8 +96,9 @@ function GoalCard({ goal, tasks, isSelected, onSelect, onOpenDetail, onDoubleCli
         borderRadius: '10px',
         overflow: 'hidden',
         cursor: 'pointer',
-        boxShadow: isSelected ? '0 0 0 2px ' + (goal.color || 'var(--accent)') : 'none',
+        boxShadow: isSelected ? '0 0 0 2px ' + (goal.color || 'var(--color-accent)') : 'none',
         transition: 'box-shadow 0.15s ease, transform 0.1s ease',
+        opacity: goal.status === 'on_hold' ? 0.5 : 1,
       }}
       onMouseEnter={e => {
         if (!isSelected) (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)';
@@ -107,7 +108,7 @@ function GoalCard({ goal, tasks, isSelected, onSelect, onOpenDetail, onDoubleCli
       }}
     >
       {/* Top color bar */}
-      <div style={{ height: '3px', background: goal.color || 'var(--accent)' }} />
+      <div style={{ height: '3px', background: goal.color || 'var(--color-accent)' }} />
 
       <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {/* Title + Category icon */}
@@ -226,7 +227,7 @@ function ListIcon({ active }: { active: boolean }) {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ color: active ? 'var(--accent)' : 'var(--text-tertiary)' }}
+      style={{ color: active ? 'var(--color-accent)' : 'var(--text-tertiary)' }}
     >
       <line x1="8" y1="6" x2="21" y2="6"/>
       <line x1="8" y1="12" x2="21" y2="12"/>
@@ -249,7 +250,7 @@ function GridIcon({ active }: { active: boolean }) {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ color: active ? 'var(--accent)' : 'var(--text-tertiary)' }}
+      style={{ color: active ? 'var(--color-accent)' : 'var(--text-tertiary)' }}
     >
       <rect x="3" y="3" width="7" height="7"/>
       <rect x="14" y="3" width="7" height="7"/>
@@ -829,7 +830,7 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
             const progress = stat.total > 0 ? Math.min(stat.completed / stat.total, 1) : 0;
             const pct = Math.round(progress * 100);
             const isSelected = selectedGoalId === goal.id;
-            const barColor = progress >= 1 ? 'var(--green)' : goal.color || 'var(--accent)';
+            const barColor = progress >= 1 ? 'var(--green)' : goal.color || 'var(--color-accent)';
             const dueSoon = isDueSoon(goal.targetDate);
             const goalTasks = tasks.filter(t => t.goalId === goal.id);
             const completedCount = goalTasks.filter(t => t.status === 'completed').length;
@@ -866,6 +867,7 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
                   flexDirection: 'column',
                   gap: '6px',
                   transition: 'background 0.15s',
+                  opacity: goal.status === 'on_hold' ? 0.5 : 1,
                 }}
                 onClick={() => handleRowClick(goal.id)}
                 onDoubleClick={(e) => { e.stopPropagation(); setEditingGoal(goal); }}
@@ -875,6 +877,9 @@ export default function GoalStrip({ goals, tasks, projects, selectedGoalId, sele
                   {/* Row 1: Title + deadline + chevron */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <CategoryIcon category={goal.category} size={14} color={goal.color || '#6366f1'} />
+                    {goal.status === 'on_hold' && (
+                      <Pause size={11} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+                    )}
                     <span style={{ flex: 1, fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {goal.title}
                     </span>

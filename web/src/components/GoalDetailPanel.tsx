@@ -1,12 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { TaskGoal, Task, TaskMilestone, TaskEpisode } from '@/lib/api';
+import { Pause } from 'lucide-react';
+import type { TaskGoal, Task, TaskEpisode } from '@/lib/api';
 import {
-  getTaskMilestones,
-  createTaskMilestone,
-  updateTaskMilestone,
-  deleteTaskMilestone,
   getTaskEpisodes,
   deleteTaskEpisode,
 } from '@/lib/api';
@@ -37,6 +34,7 @@ const STATUS_LABEL: Record<string, string> = {
   active: '진행 중',
   completed: '완료',
   archived: '보관됨',
+  on_hold: '보류',
 };
 
 const TASK_STATUS_LABEL: Record<string, string> = {
@@ -84,7 +82,7 @@ function EditableTitle({ value, color, onSave }: { value: string; color: string;
           color: 'var(--text-primary)',
           background: 'transparent',
           border: 'none',
-          borderBottom: '1px solid var(--accent)',
+          borderBottom: '1px solid var(--color-accent)',
           outline: 'none',
           width: '100%',
           lineHeight: 1.3,
@@ -207,7 +205,7 @@ function ColorDot({ color, onSave }: { color: string; onSave: (c: string) => voi
           width: '10px',
           height: '10px',
           borderRadius: '50%',
-          background: color || 'var(--accent)',
+          background: color || 'var(--color-accent)',
           border: 'none',
           cursor: 'pointer',
           padding: 0,
@@ -308,7 +306,7 @@ function EditablePriority({ value, onSave }: { value: string; onSave: (v: string
                 textAlign: 'left',
                 fontSize: '12px',
                 background: value === p ? 'var(--accent-soft)' : 'transparent',
-                color: value === p ? 'var(--accent)' : 'var(--text-primary)',
+                color: value === p ? 'var(--color-accent)' : 'var(--text-primary)',
                 border: 'none',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
@@ -415,203 +413,78 @@ function EditableDate({ value, onSave }: { value?: string; onSave: (v: string | 
   );
 }
 
-// ── Milestone section component ──
-function MilestoneSection({ goalId }: { goalId: string }) {
-  const [milestones, setMilestones] = useState<TaskMilestone[]>([]);
-  const [adding, setAdding] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const data = await getTaskMilestones(goalId);
-      setMilestones(data);
-    } catch {
-      // silently ignore if table doesn't exist yet
-    }
-  }, [goalId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const handleToggle = async (m: TaskMilestone) => {
-    try {
-      await updateTaskMilestone(m.id, {
-        isCompleted: !m.isCompleted,
-        completedAt: m.isCompleted ? null : new Date().toISOString(),
-      });
-      load();
-    } catch { /* ignore */ }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteTaskMilestone(id);
-      load();
-    } catch { /* ignore */ }
-  };
-
-  const handleAdd = async () => {
-    const title = newTitle.trim();
-    if (!title) { setAdding(false); return; }
-    try {
-      await createTaskMilestone(goalId, title);
-      setNewTitle('');
-      setAdding(false);
-      load();
-    } catch { /* ignore */ }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleAdd();
-    if (e.key === 'Escape') { setAdding(false); setNewTitle(''); }
-  };
+// ── Inline status selector ──
+function EditableStatus({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (adding) setTimeout(() => inputRef.current?.focus(), 30);
-  }, [adding]);
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
 
-  const completedCount = milestones.filter(m => m.isCompleted).length;
+  const statusColor = value === 'active' ? 'var(--color-accent)' : value === 'completed' ? 'var(--green)' : value === 'on_hold' ? 'var(--text-tertiary)' : 'var(--text-secondary)';
+  const statusBg = value === 'active' ? 'var(--accent-soft)' : value === 'completed' ? 'var(--green-soft)' : 'var(--bg-elevated)';
 
   return (
-    <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <h3
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          padding: '3px 8px',
+          borderRadius: '12px',
+          fontSize: '12px',
+          fontWeight: 500,
+          background: statusBg,
+          color: statusColor,
+          border: '1px solid var(--border-subtle)',
+          cursor: 'pointer',
+          outline: 'none',
+        }}
+      >
+        {STATUS_LABEL[value] ?? value} ▾
+      </button>
+      {open && (
+        <div
           style={{
-            fontSize: '12px',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            color: 'var(--text-tertiary)',
-            margin: 0,
+            position: 'absolute',
+            top: '26px',
+            left: 0,
+            background: 'var(--bg-elevated)',
+            borderRadius: '8px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+            zIndex: 100,
+            overflow: 'hidden',
           }}
         >
-          마일스톤 {milestones.length > 0 && '(' + completedCount + '/' + milestones.length + ')'}
-        </h3>
-      </div>
-
-      {milestones.length === 0 && !adding && (
-        <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', fontStyle: 'italic', margin: '0 0 6px' }}>없음</p>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-        {milestones.map(m => (
-          <div
-            key={m.id}
-            className="group"
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 2px' }}
-          >
-            {/* Checkbox */}
+          {(['active', 'on_hold', 'completed', 'archived'] as const).map(s => (
             <button
-              onClick={() => handleToggle(m)}
+              key={s}
+              onClick={() => { onSave(s); setOpen(false); }}
               style={{
-                flexShrink: 0,
-                width: '15px',
-                height: '15px',
-                borderRadius: '50%',
-                border: m.isCompleted ? 'none' : '1.5px solid var(--border-subtle)',
-                background: m.isCompleted ? 'var(--green)' : 'transparent',
-                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                padding: 0,
-                outline: 'none',
-              }}
-            >
-              {m.isCompleted && (
-                <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
-                  <polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </button>
-
-            {/* Title */}
-            <span
-              style={{
-                flex: 1,
-                fontSize: '13px',
-                color: m.isCompleted ? 'var(--text-tertiary)' : 'var(--text-primary)',
-                textDecoration: m.isCompleted ? 'line-through' : 'none',
-              }}
-            >
-              {m.title}
-            </span>
-
-            {/* Delete — hover only */}
-            <button
-              onClick={() => handleDelete(m.id)}
-              className="opacity-0 group-hover:opacity-100"
-              style={{
-                flexShrink: 0,
-                padding: '1px 4px',
+                gap: '6px',
+                width: '100%',
+                padding: '6px 12px',
+                textAlign: 'left',
+                fontSize: '12px',
+                background: value === s ? 'var(--accent-soft)' : 'transparent',
+                color: value === s ? 'var(--color-accent)' : 'var(--text-primary)',
                 border: 'none',
-                background: 'transparent',
-                color: 'var(--text-tertiary)',
                 cursor: 'pointer',
-                fontSize: '13px',
-                lineHeight: 1,
-                borderRadius: '4px',
-                transition: 'opacity 0.1s ease',
+                whiteSpace: 'nowrap',
               }}
             >
-              ×
+              {s === 'on_hold' && <Pause size={11} />}
+              {STATUS_LABEL[s]}
             </button>
-          </div>
-        ))}
-
-        {/* Inline add input */}
-        {adding && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 2px' }}>
-            <div
-              style={{
-                flexShrink: 0,
-                width: '15px',
-                height: '15px',
-                borderRadius: '50%',
-                border: '1.5px solid var(--border-subtle)',
-                background: 'transparent',
-              }}
-            />
-            <input
-              ref={inputRef}
-              value={newTitle}
-              onChange={e => setNewTitle(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onBlur={handleAdd}
-              placeholder="마일스톤 입력..."
-              style={{
-                flex: 1,
-                fontSize: '13px',
-                color: 'var(--text-primary)',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: '1px solid var(--border-subtle)',
-                outline: 'none',
-                padding: '0 0 2px',
-              }}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Add button */}
-      {!adding && (
-        <button
-          onClick={() => setAdding(true)}
-          style={{
-            marginTop: '8px',
-            fontSize: '12px',
-            color: 'var(--text-tertiary)',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 0,
-          }}
-          onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
-          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-tertiary)')}
-        >
-          + 마일스톤 추가
-        </button>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -699,10 +572,11 @@ export default function GoalDetailPanel({ goal, tasks, agents, onClose, onUpdate
 
   const handleComplete = () => {
     if (!goal) return;
-    onUpdateGoal(goal.id, {
-      status: goal.status === 'completed' ? 'active' : 'completed',
-      completedAt: goal.status === 'completed' ? null : new Date().toISOString(),
-    });
+    if (goal.status === 'completed' || goal.status === 'on_hold') {
+      onUpdateGoal(goal.id, { status: 'active', completedAt: null });
+    } else {
+      onUpdateGoal(goal.id, { status: 'completed', completedAt: new Date().toISOString() });
+    }
   };
 
   const handleDelete = () => {
@@ -807,20 +681,31 @@ export default function GoalDetailPanel({ goal, tasks, agents, onClose, onUpdate
                 alignItems: 'center',
               }}
             >
-              {/* Status (read-only badge, changed via complete button) */}
-              <span
-                style={{
-                  padding: '3px 8px',
-                  borderRadius: '12px',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  background: 'var(--bg-elevated)',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                {STATUS_LABEL[goal.status] ?? goal.status}
-              </span>
+              {/* Status badge — clickable dropdown */}
+              <EditableStatus
+                value={goal.status}
+                onSave={v => save({ status: v })}
+              />
+              {/* 보류 중 badge */}
+              {goal.status === 'on_hold' && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '3px 8px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    background: 'rgba(107,114,128,0.12)',
+                    color: 'var(--text-tertiary)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <Pause size={11} />
+                  보류 중
+                </span>
+              )}
 
               {/* Priority — inline dropdown */}
               <EditablePriority
@@ -839,7 +724,7 @@ export default function GoalDetailPanel({ goal, tasks, agents, onClose, onUpdate
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>달성률</span>
-                <span style={{ fontSize: '22px', fontWeight: 700, color: goal.color || 'var(--accent)' }}>
+                <span style={{ fontSize: '22px', fontWeight: 700, color: goal.color || 'var(--color-accent)' }}>
                   {progress}%
                 </span>
               </div>
@@ -857,7 +742,7 @@ export default function GoalDetailPanel({ goal, tasks, agents, onClose, onUpdate
                     height: '100%',
                     borderRadius: '4px',
                     width: progress + '%',
-                    background: progress >= 100 ? 'var(--green)' : goal.color || 'var(--accent)',
+                    background: progress >= 100 ? 'var(--green)' : goal.color || 'var(--color-accent)',
                     transition: 'width 0.4s ease',
                   }}
                 />
@@ -866,9 +751,6 @@ export default function GoalDetailPanel({ goal, tasks, agents, onClose, onUpdate
                 {completedCount} / {totalTasks} 완료
               </p>
             </div>
-
-            {/* Milestones */}
-            <MilestoneSection goalId={goal.id} />
 
             {/* Episode history — series goals only */}
             {goal.goalType === 'series' && (
@@ -981,7 +863,7 @@ export default function GoalDetailPanel({ goal, tasks, agents, onClose, onUpdate
                           borderRadius: '8px',
                           fontSize: '11px',
                           background: task.status === 'completed' ? 'var(--green-soft)' : task.status === 'in_progress' ? 'var(--accent-soft)' : 'var(--bg-secondary)',
-                          color: task.status === 'completed' ? 'var(--green)' : task.status === 'in_progress' ? 'var(--accent)' : 'var(--text-tertiary)',
+                          color: task.status === 'completed' ? 'var(--green)' : task.status === 'in_progress' ? 'var(--color-accent)' : 'var(--text-tertiary)',
                           flexShrink: 0,
                         }}
                       >
@@ -1012,11 +894,11 @@ export default function GoalDetailPanel({ goal, tasks, agents, onClose, onUpdate
                   fontWeight: 500,
                   border: 'none',
                   cursor: 'pointer',
-                  background: goal.status === 'completed' ? 'var(--btn-secondary)' : 'var(--btn-primary)',
-                  color: goal.status === 'completed' ? 'var(--btn-secondary-text)' : 'var(--btn-primary-text)',
+                  background: goal.status === 'completed' || goal.status === 'on_hold' ? 'var(--btn-secondary)' : 'var(--btn-primary)',
+                  color: goal.status === 'completed' || goal.status === 'on_hold' ? 'var(--btn-secondary-text)' : 'var(--btn-primary-text)',
                 }}
               >
-                {goal.status === 'completed' ? '다시 활성화' : '완료 처리'}
+                {goal.status === 'completed' ? '다시 활성화' : goal.status === 'on_hold' ? '활성화' : '완료 처리'}
               </button>
               <button
                 onClick={handleDelete}
